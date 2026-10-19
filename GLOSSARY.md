@@ -1,0 +1,86 @@
+# Youtube TV
+
+A lean-back player for a household that turns YouTube videos into live, TV-style Channels.
+
+## Language
+
+### Programming
+
+**Channel**:
+A named, always-on lineup of videos drawn from one or more Sources, tuned into like a TV channel. Never a YouTube channel.
+_Avoid_: Station, lineup, stream
+
+**Source**:
+A place a Channel draws videos from: a YouTube channel, a YouTube playlist, or a hand-picked video list.
+_Avoid_: Feed, input
+
+**YouTube channel**:
+A creator's channel on YouTube, used as one kind of Source. Always written in full.
+_Avoid_: Channel (on its own), creator
+
+**Filter**:
+A Channel's rule that keeps certain videos off it: Shorts, too long, too old, or a blocked keyword in the title.
+_Avoid_: Exclusion, block rule
+
+**Ordering**:
+A Channel's own rule for the sequence its videos air in: Shuffle, New uploads first, or Fixed order.
+_Avoid_: Sort, play mode
+
+**Shuffle**:
+The default Ordering: a set mix of recent videos and Back catalog (e.g. 3 to 1), each drawn at random with no repeats until that group has all aired.
+
+**Back catalog**:
+A Channel's videos older than its recent cut-off (e.g. 6 months).
+_Avoid_: Archive, old videos
+
+**Fixed order**:
+The Ordering where videos air Source by Source in the Channel's listed order, each Source oldest first (playlists and lists keep their own order), then loop.
+
+**New uploads first**:
+The Ordering where a New upload airs right after the current Slot once someone Tunes in; everything else airs in Shuffle order.
+
+**New upload**:
+A video published after its Source was added to the Channel that hasn't aired on that Channel yet.
+_Avoid_: Fresh video, latest video
+
+### People
+
+**Household**:
+Everyone who watches; they all share the same Channels, with no profiles or logins.
+_Avoid_: User, account, profile
+
+**Screen**:
+One TV or display running the app, watching one Channel at a time.
+_Avoid_: Device, client, player
+
+**Tune in**:
+Switching a Screen to a Channel; it always lands at Live.
+_Avoid_: Open, select, switch to
+
+### Time
+
+**Schedule**:
+The timeline of which video each Channel airs when, which runs whether or not anyone is watching. Past and current Slots never change; upcoming ones can.
+_Avoid_: Playlist, queue
+
+**Slot**:
+One video's scheduled airing on a Channel, with a start and end time.
+_Avoid_: Program, airing, episode
+
+**Live**:
+The point in a Channel's Schedule that is airing right now.
+
+**Time-shift**:
+How far behind or ahead of Live a Screen is watching a Channel. Tuning in always resets it to zero.
+_Avoid_: Delay, offset, lag
+
+**Restart**:
+Playing the current Slot from its beginning, which Time-shifts the Screen.
+
+**Go live**:
+Dropping a Screen's Time-shift back to zero.
+_Avoid_: Catch up, sync
+
+**Guide**:
+The browsable view of every Channel's Schedule, past and future, from which any Slot can be played.
+_Avoid_: EPG, TV guide

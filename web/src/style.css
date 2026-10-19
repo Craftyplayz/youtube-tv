@@ -1,0 +1,82 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0f;
+  --panel: #16161d;
+  --line: #2a2a35;
+  --text: #eee;
+  --dim: #9a9aa8;
+  --accent: #e53935;
+  font-family: system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); }
+a { color: var(--text); }
+button, input, select, textarea {
+  font: inherit; color: inherit; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px;
+}
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--dim); }
+button:disabled { opacity: .4; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Player */
+.tv { position: fixed; inset: 0; background: #000; overflow: hidden; }
+.tv:has(.hud.hidden) { cursor: none; }
+.screen, .screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+.splash { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; font-size: 1.5rem; cursor: pointer; }
+.splash small { color: var(--dim); font-size: 1rem; }
+.hud {
+  position: absolute; inset: auto 0 0 0; padding: 24px 32px; gap: 16px;
+  display: flex; justify-content: space-between; align-items: end;
+  background: linear-gradient(transparent, rgb(0 0 0 / .85)); transition: opacity .4s;
+}
+.hud.hidden { opacity: 0; pointer-events: none; }
+.now-playing { display: grid; gap: 4px; }
+.now-playing .ch { font-size: 1.6rem; font-weight: 700; }
+.shift { justify-self: start; padding: 2px 8px; border-radius: 4px; background: var(--panel); font-variant-numeric: tabular-nums; }
+.shift.live { background: var(--accent); }
+.hud nav { display: flex; gap: 8px; align-items: center; }
+.hud nav a { padding: 6px 10px; }
+
+/* Guide */
+.guide { position: fixed; inset: 0; display: grid; align-content: center; padding: 32px 0; background: rgb(0 0 0 / .8); }
+.guide-grid { overflow: auto; max-height: calc(100vh - 64px); background: var(--bg); }
+.guide-loading { padding: 16px; }
+.guide-row { position: relative; height: 60px; border-bottom: 1px solid var(--line); }
+.guide-times { position: sticky; top: 0; z-index: 3; height: 32px; background: var(--bg); }
+.guide-times span { position: absolute; top: 8px; padding-left: 4px; border-left: 1px solid var(--line); color: var(--dim); font-size: .85rem; }
+.guide-name {
+  position: sticky; left: 0; z-index: 2; width: 180px; height: 100%; padding: 0 12px;
+  display: flex; align-items: center; gap: 6px; background: var(--panel); font-weight: 600;
+}
+.guide-name small { color: var(--dim); font-weight: 400; }
+.guide-row.current .guide-name { color: var(--accent); }
+.guide-row button {
+  position: absolute; top: 4px; bottom: 4px; padding: 4px 8px; overflow: hidden;
+  display: grid; align-content: center; text-align: left; white-space: nowrap;
+}
+.guide-row button b, .guide-row button small { overflow: hidden; text-overflow: ellipsis; }
+.guide-row button small { color: var(--dim); }
+.guide-row button.past { opacity: .55; }
+.guide-row button.on { border-color: var(--accent); }
+.off-air { position: absolute; left: 200px; top: 20px; color: var(--dim); }
+
+/* Settings */
+.settings { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+.settings header { display: flex; justify-content: space-between; align-items: center; }
+.channel { display: grid; gap: 12px; margin: 16px 0; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.channel form { display: grid; gap: 8px; }
+.channel label { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--dim); }
+.channel input, .channel select, .channel textarea { background: var(--bg); }
+.row { display: flex; gap: 8px; align-items: center; }
+.row input { flex: 1; font-weight: 600; }
+.number { width: 2ch; font-size: 1.4rem; font-weight: 700; }
+.sources { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sources li { display: flex; gap: 8px; align-items: center; }
+.sources small { flex: 1; color: var(--dim); }
+textarea { width: 100%; resize: vertical; }
+.new { display: flex; gap: 8px; }
+.new input { flex: 1; }
+.error { color: #ff8a80; }
+.busy { color: var(--dim); }

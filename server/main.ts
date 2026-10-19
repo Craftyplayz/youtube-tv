@@ -1,0 +1,151 @@
+import { mkdirSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { extname, join } from 'node:path';
+import { openDb } from './db.ts';
+import { queueNewUploads, schedule, type Channel } from './schedule.ts';
+import { refreshChannel, refreshSource, resolveSource, type Source } from './youtube.ts';
+
+const PORT = Number(process.env.PORT ?? 8080);
+const DATA_DIR = process.env.DATA_DIR ?? 'data';
+const WEB = join(import.meta.dirname, '..', 'web', 'dist');
+const HOUR = 3_600_000;
+const ORDERINGS = ['shuffle', 'new_first', 'fixed'];
+const TYPES: Record<string, string> = {
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
+};
+
+mkdirSync(DATA_DIR, { recursive: true });
+const db = openDb(join(DATA_DIR, 'youtube-tv.db'));
+if (!process.env.YOUTUBE_API_KEY) console.warn('YOUTUBE_API_KEY is not set: Sources cannot be added or refreshed');
+
+class BadRequest extends Error {}
+
+const channels = () => db.prepare('SELECT * FROM channels ORDER BY position, id').all() as Channel[];
+function channel(id: string) {
+  const c = db.prepare('SELECT * FROM channels WHERE id = ?').get(Number(id)) as Channel | undefined;
+  if (!c) throw new BadRequest('No such Channel');
+  return c;
+}
+function name(v: unknown) {
+  if (typeof v !== 'string' || !v.trim()) throw new BadRequest('Channel name is required');
+  return v.trim().slice(0, 100);
+}
+function num(v: unknown, min: number) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < min) throw new BadRequest(`Expected a whole number of at least ${min}`);
+  return n;
+}
+
+type Route = [method: string, path: RegExp, handler: (params: string[], body: any, url: URL) => unknown];
+const routes: Route[] = [
+  ['GET', /^\/api\/channels$/, () => channels().map(c => ({
+    ...c,
+    sources: db.prepare(`
+      SELECT id, kind, label, (SELECT COUNT(*) FROM source_videos WHERE source_id = sources.id) AS videos
+      FROM sources WHERE channel_id = ? ORDER BY position, id`).all(c.id),
+  }))],
+
+  ['POST', /^\/api\/channels$/, (_, b) => {
+    db.prepare('INSERT INTO channels (name, position) VALUES (?, (SELECT COALESCE(MAX(position), 0) + 1 FROM channels))').run(name(b.name));
+    return null;
+  }],
+
+  ['PUT', /^\/api\/channels\/(\d+)$/, ([id], b) => {
+    const c = { ...channel(id), ...b };
+    if (!ORDERINGS.includes(c.ordering)) throw new BadRequest('Unknown Ordering');
+    db.prepare(`
+      UPDATE channels SET name = ?, position = ?, ordering = ?, recent_ratio = ?, recent_days = ?,
+        skip_shorts = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
+      name(c.name), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
+      c.skip_shorts ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
+    return null;
+  }],
+
+  ['DELETE', /^\/api\/channels\/(\d+)$/, ([id]) => {
+    db.prepare('DELETE FROM channels WHERE id = ?').run(Number(id));
+    return null;
+  }],
+
+  ['POST', /^\/api\/channels\/(\d+)\/sources$/, async ([id], b) => {
+    const c = channel(id);
+    const s = await resolveSource(String(b.input ?? ''));
+    const src = db.prepare(`
+      INSERT INTO sources (channel_id, kind, ref, label, position, added_at)
+      VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM sources WHERE channel_id = ?), ?) RETURNING *`)
+      .get(c.id, s.kind, s.ref, s.label, c.id, Date.now()) as Source;
+    await refreshSource(db, src);
+    return null;
+  }],
+
+  ['DELETE', /^\/api\/sources\/(\d+)$/, ([id]) => {
+    db.prepare('DELETE FROM sources WHERE id = ?').run(Number(id));
+    return null;
+  }],
+
+  ['POST', /^\/api\/channels\/(\d+)\/tune$/, ([id]) => {
+    const c = channel(id);
+    // Tuning in is what lets New uploads get queued, so check the Sources first (at most every 5 minutes)
+    refreshChannel(db, c.id, 5 * 60_000).then(() => queueNewUploads(db, c)).catch(console.error);
+    return null;
+  }],
+
+  ['GET', /^\/api\/schedule$/, (_, __, url) => {
+    const now = Date.now();
+    const from = Number(url.searchParams.get('from') ?? now);
+    const to = Number(url.searchParams.get('to') ?? now + 1);
+    if (!(to > from) || to - from > 7 * 24 * HOUR) throw new BadRequest('Bad time range');
+    const only = url.searchParams.get('channel');
+    return {
+      now,
+      channels: channels().filter(c => !only || c.id === Number(only)).map(c => ({ id: c.id, name: c.name, slots: schedule(db, c, from, to, now) })),
+    };
+  }],
+
+  ['POST', /^\/api\/videos\/([\w-]{11})\/broken$/, ([id]) => {
+    db.prepare('UPDATE videos SET playable = 0 WHERE id = ?').run(id);
+    return null;
+  }],
+];
+
+async function readBody(req: IncomingMessage) {
+  let raw = '';
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > 1_000_000) throw new BadRequest('Request too large');
+  }
+  try {
+    return raw ? JSON.parse(raw) ?? {} : {};
+  } catch {
+    throw new BadRequest('Invalid JSON');
+  }
+}
+
+function send(res: ServerResponse, status: number, data: unknown) {
+  res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(data));
+}
+
+async function serveWeb(path: string, res: ServerResponse) {
+  let file = join(WEB, path);
+  let data = file.startsWith(WEB) ? await readFile(file).catch(() => null) : null;
+  if (!data) data = await readFile((file = join(WEB, 'index.html'))); // the page handles its own routes
+  res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(data);
+}
+
+createServer(async (req, res) => {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  try {
+    if (!url.pathname.startsWith('/api/')) return await serveWeb(url.pathname, res);
+    const route = routes.find(([method, path]) => method === req.method && path.test(url.pathname));
+    if (!route) return send(res, 404, { error: 'Not found' });
+    send(res, 200, await route[2](route[1].exec(url.pathname)!.slice(1), await readBody(req), url));
+  } catch (e) {
+    send(res, e instanceof BadRequest ? 400 : 500, { error: (e as Error).message });
+  }
+}).listen(PORT, () => console.log(`Youtube TV on http://localhost:${PORT}`));
+
+// Shuffle and Fixed order Channels pick up new videos from this; every Channel also refreshes on Tune in
+setInterval(() => {
+  for (const c of channels()) refreshChannel(db, c.id, HOUR - 60_000).catch(console.error);
+}, HOUR);
