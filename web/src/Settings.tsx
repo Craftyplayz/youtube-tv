@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Channel } from './api.ts';
+import { api, type Channel, type Source } from './api.ts';
 
 const ORDERINGS = { shuffle: 'Shuffle', new_first: 'New uploads first', fixed: 'Fixed order' };
 const KINDS = { youtube_channel: 'YouTube channel', playlist: 'Playlist', list: 'Hand-picked list' };
@@ -30,6 +30,11 @@ export default function Settings() {
     api(`channels/${b.id}`, 'PUT', { position: a.position }),
   ]));
 
+  // Moves the slider and its percentages straight away; saveShare stores it once the slider is let go
+  const setShare = (s: Source, share: number) =>
+    setChannels(cs => cs.map(c => ({ ...c, sources: c.sources.map(x => x.id === s.id ? { ...x, share } : x) })));
+  const saveShare = (s: Source) => api(`sources/${s.id}`, 'PUT', { share: s.share }).catch(e => setError(e.message));
+
   const toggle = (id: number) => setOpen(o => o.includes(id) ? o.filter(x => x !== id) : [...o, id]);
 
   function newChannel() {
@@ -52,6 +57,7 @@ export default function Settings() {
 
       {channels.map((c, i) => {
         const isOpen = open.includes(c.id);
+        const totalShare = c.sources.reduce((a, s) => a + s.share, 0);
         return (
           <section key={c.id} className="channel">
             <div className="row">
@@ -72,7 +78,7 @@ export default function Settings() {
               <form onSubmit={e => {
                 e.preventDefault();
                 const f = Object.fromEntries(new FormData(e.currentTarget));
-                run(() => api(`channels/${c.id}`, 'PUT', { ...f, skip_shorts: f.skip_shorts === 'on', skip_live: f.skip_live === 'on' }));
+                run(() => api(`channels/${c.id}`, 'PUT', { ...f, skip_shorts: f.skip_shorts === 'on', skip_live: f.skip_live === 'on', by_share: f.by_share === 'on' }));
               }}>
                 <label>Name <input name="name" defaultValue={c.name} required /></label>
                 <label>Ordering
@@ -80,6 +86,7 @@ export default function Settings() {
                     {Object.entries(ORDERINGS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                   </select>
                 </label>
+                <label>Mix Sources by the Share set on each below, instead of every video equally often (not in Fixed order) <input name="by_share" type="checkbox" defaultChecked={!!c.by_share} /></label>
                 <label>Recent videos per Back catalog video <input name="recent_ratio" type="number" min={0} defaultValue={c.recent_ratio} /></label>
                 <label>Recent means newer than (days) <input name="recent_days" type="number" min={1} defaultValue={c.recent_days} /></label>
                 <label>Skip Shorts <input name="skip_shorts" type="checkbox" defaultChecked={!!c.skip_shorts} /></label>
@@ -95,6 +102,14 @@ export default function Settings() {
                 {c.sources.map(s => (
                   <li key={s.id}>
                     {s.label} <small>{KINDS[s.kind]} · {s.videos} videos</small>
+                    {!!c.by_share && (
+                      <span className="share">
+                        <input type="range" min={1} max={100} value={s.share} aria-label={`Share for ${s.label}`}
+                          onChange={e => setShare(s, Number(e.target.value))}
+                          onPointerUp={() => saveShare(s)} onKeyUp={() => saveShare(s)} />
+                        <output>{Math.round(s.share / totalShare * 100)}%</output>
+                      </span>
+                    )}
                     <button onClick={() => confirm(`Remove ${s.label}?`) && run(() => api(`sources/${s.id}`, 'DELETE'))}>Remove</button>
                   </li>
                 ))}

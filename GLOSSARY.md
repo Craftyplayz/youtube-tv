@@ -14,6 +14,10 @@ _Avoid_: Station, lineup, stream
 A place a Channel draws videos from: a YouTube channel, a YouTube playlist, or a hand-picked video list.
 _Avoid_: Feed, input
 
+**Share**:
+A Source's slice of its Channel's airtime, weighed against the Channel's other Sources, used only when the Channel mixes by Share (Shuffle and New uploads first). Otherwise every video airs equally often, so bigger Sources air more.
+_Avoid_: Weight, ratio, priority
+
 **YouTube channel**:
 A creator's channel on YouTube, used as one kind of Source. Always written in full.
 _Avoid_: Channel (on its own), creator

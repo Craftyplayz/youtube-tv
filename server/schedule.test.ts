@@ -43,6 +43,22 @@ test('Shuffle mixes recent videos and Back catalog at the set ratio', () => {
   assert.ok(new Set(blocks).size > 1, 'its spot in the block varies');
 });
 
+test('Mixing by Share splits airtime between Sources whatever their size', () => {
+  // How often the 2-video Source airs next to an 8-video one, over 400 Slots
+  const small = (byShare: number, bigShare = 50, smallShare = 50) => {
+    const db = setup('shuffle');
+    db.prepare('UPDATE channels SET by_share = ?').run(byShare);
+    addSource(db, 'list', NOW - DAY, recent('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
+    addSource(db, 'list', NOW - DAY, recent('x', 'y'));
+    db.prepare('UPDATE sources SET share = ? WHERE id = 1').run(bigShare);
+    db.prepare('UPDATE sources SET share = ? WHERE id = 2').run(smallShare);
+    return ids(db, NOW + 4000 * MIN).filter(id => id === 'x' || id === 'y').length / 400;
+  };
+  assert.equal(small(0), 0.2, 'off: every video equally often, so the small Source gets its size');
+  assert.ok(Math.abs(small(1) - 0.5) < 0.08, `equal Shares split evenly, got ${small(1)}`);
+  assert.ok(Math.abs(small(1, 25, 75) - 0.75) < 0.08, `75/25 Shares, got ${small(1, 25, 75)}`);
+});
+
 test('past and current Slots never change', () => {
   const db = setup('shuffle');
   addSource(db, 'list', NOW - DAY, recent('a', 'b', 'c'));

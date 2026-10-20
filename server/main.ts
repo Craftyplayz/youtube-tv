@@ -55,7 +55,7 @@ const routes: Route[] = [
     ...c,
     slug: slug(c.name, c.id),
     sources: db.prepare(`
-      SELECT id, kind, label, (SELECT COUNT(*) FROM source_videos WHERE source_id = sources.id) AS videos
+      SELECT id, kind, label, share, (SELECT COUNT(*) FROM source_videos WHERE source_id = sources.id) AS videos
       FROM sources WHERE channel_id = ? ORDER BY position, id`).all(c.id),
   }))],
 
@@ -68,9 +68,9 @@ const routes: Route[] = [
     if (!ORDERINGS.includes(c.ordering)) throw new BadRequest('Unknown Ordering');
     db.prepare(`
       UPDATE channels SET name = ?, position = ?, ordering = ?, recent_ratio = ?, recent_days = ?,
-        skip_shorts = ?, skip_live = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
+        skip_shorts = ?, skip_live = ?, by_share = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
       freeSlug(name(c.name), Number(id)), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
-      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
+      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, c.by_share ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
     return null;
   }],
 
@@ -101,6 +101,11 @@ const routes: Route[] = [
       await refreshSource(db, src).catch(e => errors.push(`${s.label}: ${e.message}`));
     }
     return { failed: failed.join('\n'), error: errors.join('\n') };
+  }],
+
+  ['PUT', /^\/api\/sources\/(\d+)$/, ([id], b) => {
+    db.prepare('UPDATE sources SET share = ? WHERE id = ?').run(Math.min(100, num(b.share, 1) ?? 50), Number(id));
+    return null;
   }],
 
   ['DELETE', /^\/api\/sources\/(\d+)$/, ([id]) => {

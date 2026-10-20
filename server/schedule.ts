@@ -11,19 +11,20 @@ export type Channel = {
   recent_days: number;
   skip_shorts: number;
   skip_live: number;
+  by_share: number;
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;
 };
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
 
-type Video = { id: string; title: string; channel_title: string; published_at: number; duration: number; is_short: number; added_at: number };
+type Video = { id: string; title: string; channel_title: string; published_at: number; duration: number; is_short: number; added_at: number; source_id: number; share: number };
 type State = { n: number; counts: Map<string, number>; queue: string[]; last: string | null };
 
 // Videos the Channel's Filters allow, in Fixed order sequence
 function pool(db: Db, ch: Channel, now: number): Video[] {
   const rows = db.prepare(`
-    SELECT v.id, v.title, v.channel_title, v.published_at, v.duration, v.is_short, s.added_at
+    SELECT v.id, v.title, v.channel_title, v.published_at, v.duration, v.is_short, s.added_at, s.id AS source_id, s.share
     FROM sources s JOIN source_videos sv ON sv.source_id = s.id JOIN videos v ON v.id = sv.video_id
     WHERE s.channel_id = ? AND v.playable = 1 AND v.duration > 0
       AND NOT EXISTS (SELECT 1 FROM exclusions e WHERE e.channel_id = s.channel_id AND e.video_id = v.id)
@@ -66,6 +67,13 @@ function pick(ch: Channel, videos: Video[], s: State, at: number): Video | undef
     if (queued) return queued;
     // New uploads that aren't queued yet wait for someone to Tune in
     videos = videos.filter(v => !(v.published_at > v.added_at && !s.counts.has(v.id)));
+  }
+  if (ch.by_share) {
+    // Draw a Source first, weighted by Share, so a small playlist can air as often as a big one; its videos then repeat sooner
+    const shares = new Map(videos.map(v => [v.source_id, v.share]));
+    let r = hash(`${s.n}:source:${ch.id}`) / 2 ** 32 * [...shares.values()].reduce((a, w) => a + w, 0);
+    const source = [...shares].find(([, w]) => (r -= w) < 0)?.[0];
+    videos = videos.filter(v => v.source_id === source);
   }
   const cutoff = at - ch.recent_days * DAY;
   const recent = videos.filter(v => v.published_at >= cutoff);

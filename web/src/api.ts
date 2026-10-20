@@ -1,6 +1,6 @@
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
 export type Lineup = { id: number; name: string; slug: string; slots: Slot[] };
-export type Source = { id: number; kind: 'youtube_channel' | 'playlist' | 'list'; label: string; videos: number };
+export type Source = { id: number; kind: 'youtube_channel' | 'playlist' | 'list'; label: string; share: number; videos: number };
 export type Channel = {
   id: number;
   name: string;
@@ -11,6 +11,7 @@ export type Channel = {
   recent_days: number;
   skip_shorts: number;
   skip_live: number;
+  by_share: number;
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;

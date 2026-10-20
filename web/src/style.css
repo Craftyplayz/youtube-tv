@@ -175,6 +175,9 @@ button:disabled { opacity: .4; cursor: default; }
 .sources { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .sources li { display: flex; gap: 8px; align-items: center; }
 .sources small { flex: 1; color: var(--dim); }
+.share { display: flex; gap: 8px; align-items: center; }
+.share input { width: 120px; padding: 0; accent-color: var(--accent); }
+.share output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
 textarea { width: 100%; resize: vertical; }
 .error { color: #ff8a80; white-space: pre-line; }
 .busy { color: var(--dim); }
