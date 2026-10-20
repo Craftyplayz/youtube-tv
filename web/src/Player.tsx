@@ -58,7 +58,7 @@ export default function Player({ slug }: { slug: string }) {
   const hideTimer = useRef(0);
   const overControls = useRef(false);
   const rightDown = useRef(false);
-  const captionsFor = useRef('');
+  const clickTimer = useRef(0);
   const vol = useRef(load('volume', 100));
   const [lineups, setLineups] = useState<Lineup[] | null>(null);
   const [started, setStarted] = useState(false);
@@ -109,7 +109,6 @@ export default function Player({ slug }: { slug: string }) {
 
   function play(channel: number, slot: Slot | null, fromStart: boolean) {
     cur.current = { channel, slot };
-    captionsFor.current = '';
     setPos(0);
     showUi(4000);
     if (!slot) {
@@ -255,12 +254,8 @@ export default function Player({ slug }: { slug: string }) {
           const { ENDED, PLAYING, PAUSED } = window.YT.PlayerState;
           if (e.data === ENDED) next();
           if (e.data === PLAYING || e.data === PAUSED) setPaused(e.data === PAUSED);
-          // Captions reset with every new video, so re-apply the choice once each one starts
-          const id = cur.current.slot?.videoId ?? '';
-          if (e.data === PLAYING && captionsFor.current !== id) {
-            captionsFor.current = id;
-            applyCaptions(captionsOn.current);
-          }
+          // YouTube brings captions back on its own (new video, resuming from pause), so re-apply the choice whenever playback starts
+          if (e.data === PLAYING) applyCaptions(captionsOn.current);
         },
         // Fires when YouTube loads its captions module by itself; unload it again if the viewer turned captions off
         onApiChange: () => {
@@ -353,7 +348,17 @@ export default function Player({ slug }: { slug: string }) {
           )}
         </div>
       )}
-      {started && <div className="click-layer" onClick={togglePause} onDoubleClick={toggleFullscreen} />}
+      {started && (
+        <div
+          className="click-layer"
+          // A single click waits briefly so a double-click only toggles full screen, without pausing and resuming
+          onClick={e => {
+            clearTimeout(clickTimer.current);
+            if (e.detail === 1) clickTimer.current = window.setTimeout(togglePause, 300);
+          }}
+          onDoubleClick={toggleFullscreen}
+        />
+      )}
       {flash && (
         <div key={flash.key} className="flash" onAnimationEnd={() => setFlash(null)}>
           <Icon name={flash.icon} />
