@@ -5,7 +5,11 @@ import Guide from './Guide.tsx';
 import Icon, { type IconName } from './Icon.tsx';
 
 declare global {
-  interface Window { YT: any; onYouTubeIframeAPIReady: () => void }
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+    documentPictureInPicture?: { requestWindow(size: { width: number; height: number }): Promise<Window> }; // Chrome and Edge only
+  }
 }
 
 const ytReady = new Promise<void>(resolve => {
@@ -147,12 +151,21 @@ export default function Player({ slug }: { slug: string }) {
   }
 
   // A small separate window to drag onto another screen; it picks up at this exact moment and this one pauses
-  function popOut() {
+  async function popOut() {
     const { channel, slot } = cur.current;
     const l = lineups?.find(x => x.id === channel);
     if (!l || window.name === POPOUT) return;
     const at = slot && Math.round(slot.start + (yt.current?.getCurrentTime?.() ?? 0) * 1000);
-    if (window.open(`/${l.slug}${at ? `?at=${at}` : ''}`, POPOUT, 'popup,width=640,height=360')) yt.current?.pauseVideo();
+    const url = `/${l.slug}${at ? `?at=${at}` : ''}`;
+    // A picture-in-picture window stays on top of everything (Chrome, Edge); other browsers get an ordinary small window
+    const pip = await window.documentPictureInPicture?.requestWindow({ width: 640, height: 360 }).catch(() => null);
+    if (pip) {
+      pip.document.body.style.cssText = 'margin: 0; background: #000';
+      pip.document.body.append(Object.assign(pip.document.createElement('iframe'), {
+        src: url, name: POPOUT, allow: 'autoplay; fullscreen', style: 'position: fixed; inset: 0; width: 100%; height: 100%; border: 0',
+      }));
+    } else if (!window.open(url, POPOUT, 'popup,width=640,height=360')) return;
+    yt.current?.pauseVideo();
   }
 
   async function next() {
@@ -466,7 +479,7 @@ export default function Player({ slug }: { slug: string }) {
               <Ctl icon="comments" label="Comments" onClick={() => setShowComments(s => !s)} className={showComments ? 'on' : ''} aria-pressed={showComments} disabled={!slot} />
               <Ctl icon="cc" label="Captions (c)" onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} />
               <Ctl icon="home" label="Channels (Esc)" onClick={() => go('/')} />
-              {window.name !== POPOUT && <Ctl icon="popout" label="Pop out into a small window (i)" onClick={popOut} />}
+              {window.name !== POPOUT && <Ctl icon="popout" label="Pop out into a small window that stays on top (i)" onClick={popOut} />}
               <Ctl icon={fullscreen ? 'fullscreenExit' : 'fullscreen'} label={fullscreen ? 'Exit full screen (f)' : 'Full screen (f)'} onClick={toggleFullscreen} />
             </div>
           </div>
