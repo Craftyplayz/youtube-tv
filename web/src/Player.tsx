@@ -72,6 +72,7 @@ export default function Player({ slug }: { slug: string }) {
   const [volume, setVolume] = useState(vol.current);
   const [muted, setMuted] = useState(false);
   const [needsUnmute, setNeedsUnmute] = useState(false);
+  const [volumeOsd, setVolumeOsd] = useState<{ level: number; key: number } | null>(null);
   const swallowClick = useRef(false);
   const [captions, setCaptions] = useState(() => load('captions', 0) === 1);
   const captionsOn = useRef(captions);
@@ -210,6 +211,7 @@ export default function Player({ slug }: { slug: string }) {
     const level = Math.max(0, Math.min(100, Math.round(v)));
     vol.current = level;
     setVolume(level);
+    setVolumeOsd({ level, key: Date.now() });
     store('volume', level);
     yt.current?.setVolume(level);
     if (level > 0) {
@@ -449,6 +451,9 @@ export default function Player({ slug }: { slug: string }) {
             </div>
           </div>
         </div>
+      )}
+      {volumeOsd && (
+        <div key={volumeOsd.key} className="volume-osd" onAnimationEnd={() => setVolumeOsd(null)}>{volumeOsd.level}</div>
       )}
       {needsUnmute && (
         <button className="unmute" onClick={unmute}>

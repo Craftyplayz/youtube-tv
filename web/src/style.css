@@ -74,6 +74,12 @@ button:disabled { opacity: .4; cursor: default; }
   border-radius: 50%; background: rgb(0 0 0 / .5); pointer-events: none; animation: flash .5s ease-out forwards;
 }
 .flash svg { width: 40px; height: 40px; }
+.volume-osd {
+  position: absolute; top: 18%; left: 50%; transform: translateX(-50%); min-width: 56px; padding: 8px 14px;
+  border-radius: 4px; background: rgb(90 90 90 / .85); font-size: 1.1rem; font-weight: 700; text-align: center;
+  font-variant-numeric: tabular-nums; pointer-events: none; animation: osd 1.2s forwards;
+}
+@keyframes osd { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes flash { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
 
 /* Guide */
