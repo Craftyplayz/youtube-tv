@@ -11,7 +11,7 @@ const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit'
 
 type Props = { channel: number; onPlay: (channel: number, slot: Slot) => void; onClose: () => void };
 
-// Every Channel's Schedule, a day back and a few hours ahead; any Slot plays from its start
+// Every Channel's Schedule, a day back and a few hours ahead; the Slot on air joins Live, any other plays from its start
 export default function Guide({ channel, onPlay, onClose }: Props) {
   const grid = useRef<HTMLDivElement>(null);
   const [lineups, setLineups] = useState<Lineup[] | null>(null);

@@ -151,7 +151,9 @@ export default function Player({ slug }: { slug: string }) {
       document.title = `${l.name} · Youtube TV`;
     }
     api(`channels/${channel}/tune`, 'POST').catch(() => {}); // lets this Channel's New uploads get queued
-    return slot ? play(channel, slot, true) : live(channel, at);
+    const t = now();
+    // A Slot airing right now joins at the Live moment; past and upcoming ones play from their start
+    return slot ? play(channel, slot, !(slot.start <= t && t < slot.end)) : live(channel, at);
   }
 
   // A small separate window to drag onto another screen; it picks up at this exact moment and this one pauses
