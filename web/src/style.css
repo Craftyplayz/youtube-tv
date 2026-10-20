@@ -45,6 +45,9 @@ button:disabled { opacity: .4; cursor: default; }
 .hud-top .ch { font-size: 1.4rem; font-weight: 700; }
 .hud-top .title { font-size: 1.15rem; }
 .hud-top .by { color: #ccc; }
+/* Only the text itself is clickable, so a click beside it still reaches the video to pause */
+.hud-top a { justify-self: start; text-decoration: none; pointer-events: auto; }
+.hud-top a[href]:hover { text-decoration: underline; }
 .hud-bottom { padding: 0 12px 4px; pointer-events: auto; }
 .progress { position: relative; height: 4px; margin: 10px 0 6px; background: rgb(255 255 255 / .2); cursor: pointer; touch-action: none; transition: height .1s; }
 .progress::before { content: ''; position: absolute; inset: -8px 0; }

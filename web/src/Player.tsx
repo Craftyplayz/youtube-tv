@@ -70,6 +70,7 @@ export default function Player({ slug }: { slug: string }) {
   const [started, setStarted] = useState(false);
   const [guide, setGuide] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [uploader, setUploader] = useState<{ videoId: string; channelId: string }>();
   const [pos, setPos] = useState(0); // seconds into the current video
   const [ui, setUi] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -129,8 +130,11 @@ export default function Player({ slug }: { slug: string }) {
       return;
     }
     yt.current.loadVideoById({ videoId: slot.videoId, startSeconds: fromStart ? 0 : (at - slot.start) / 1000 });
-    api<{ url: string | null }>(`videos/${slot.videoId}/avatar`).catch(() => null)
-      .then(r => { if (cur.current.slot === slot) setIcon(r?.url ?? undefined); }); // ignore answers for videos already skipped past
+    api<{ channelId: string; avatar: string | null } | null>(`videos/${slot.videoId}/uploader`).catch(() => null).then(r => {
+      if (cur.current.slot !== slot) return; // ignore answers for videos already skipped past
+      setIcon(r?.avatar ?? undefined);
+      if (r) setUploader({ videoId: slot.videoId, channelId: r.channelId });
+    });
   }
 
   // Plays whatever airs at a moment: Live by default, or an earlier one for a popped-out window that was time-shifted
@@ -427,8 +431,16 @@ export default function Player({ slug }: { slug: string }) {
         <div className={`hud ${ui || paused || !slot ? '' : 'hidden'}`}>
           <div className="hud-top">
             <span className="ch">{index + 1} {lineups?.[index]?.name}</span>
-            <span className="title">{slot ? slot.title : 'Off air'}</span>
-            {slot && <span className="by">{slot.by}</span>}
+            {/* Opens the video on YouTube at this second, pausing here so the two don't play over each other */}
+            {slot ? (
+              <a className="title" href={`https://www.youtube.com/watch?v=${slot.videoId}&t=${Math.floor(pos)}s`}
+                target="_blank" rel="noreferrer" onClick={() => yt.current?.pauseVideo()}>{slot.title}</a>
+            ) : <span className="title">Off air</span>}
+            {/* Becomes a link once the uploader lookup answers for this video */}
+            {slot && (
+              <a className="by" href={uploader?.videoId === slot.videoId ? `https://www.youtube.com/channel/${uploader.channelId}` : undefined}
+                target="_blank" rel="noreferrer">{slot.by}</a>
+            )}
           </div>
           {/* Clicks must not leave focus on a button, or Space and arrow keys would press it again */}
           <div

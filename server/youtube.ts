@@ -96,20 +96,20 @@ export async function refreshChannel(db: Db, channelId: number, olderThanMs: num
   for (const s of due) await refreshSource(db, s).catch(e => console.error(`Refreshing ${s.label} failed: ${e.message}`));
 }
 
-// The uploader's avatar for a Channel page's tab icon, remembered until the server restarts
-const avatars = new Map<string, Promise<string | null>>();
-export function avatar(videoId: string) {
-  if (!avatars.has(videoId)) avatars.set(videoId, (async () => {
+// Who uploaded a video, for a Channel page's tab icon and the link under the title; remembered until the server restarts
+const uploaders = new Map<string, Promise<{ channelId: string; avatar: string | null } | null>>();
+export function uploader(videoId: string) {
+  if (!uploaders.has(videoId)) uploaders.set(videoId, (async () => {
     const v = await yt('videos', { part: 'snippet', id: videoId });
     const channelId = v?.items?.[0]?.snippet.channelId;
     if (!channelId) return null;
     const c = await yt('channels', { part: 'snippet', id: channelId });
-    return c?.items?.[0]?.snippet.thumbnails?.default?.url ?? null;
+    return { channelId, avatar: c?.items?.[0]?.snippet.thumbnails?.default?.url ?? null };
   })().catch(e => {
-    avatars.delete(videoId); // a failed lookup is retried next time
+    uploaders.delete(videoId); // a failed lookup is retried next time
     throw e;
   }));
-  return avatars.get(videoId)!;
+  return uploaders.get(videoId)!;
 }
 
 const comment = (id: string, s: any, replies = 0) =>
