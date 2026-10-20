@@ -5,6 +5,7 @@ services:
       - "${WEB_PORT:-2345}:8080"
     environment:
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     volumes:
       - youtube-tv-data:/data
     restart: unless-stopped

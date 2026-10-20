@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { go, now, schedule, thumb, type Lineup } from './api.ts';
+import { go, now, schedule, thumb, watched, type Lineup } from './api.ts';
 
 // Every Channel and what's on it right now
 export default function Home() {
@@ -26,10 +26,10 @@ export default function Home() {
           value={query} onChange={e => setQuery(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && shown[0]) go('/' + shown[0].slug); }}
         />
-        <a href="/settings">Settings</a>
+        <a href="/admin">Admin</a>
       </header>
       {lineups === null ? <p>Loading…</p>
-        : !lineups.length ? <p>No Channels yet. <a href="/settings">Add one in Settings</a></p>
+        : !lineups.length ? <p>No Channels yet. <a href="/admin">Add one in Admin</a></p>
         : !shown.length ? <p>No Channels match “{query}”.</p>
         : (
           <ul className="channel-grid">
@@ -41,6 +41,7 @@ export default function Home() {
                     {s ? <img src={thumb(s.videoId)} alt="" /> : <span className="off">Off air</span>}
                     <span className="card-name"><b>{lineups.indexOf(l) + 1}</b>{l.name}</span>
                     <span className="card-now">{s ? s.title : 'Off air'}</span>
+                    <span className="card-watched">{watched(l.watched)} watched</span>
                     {s && <progress max={s.end - s.start} value={now() - s.start} />}
                   </a>
                 </li>

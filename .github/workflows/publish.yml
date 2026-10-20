@@ -29,7 +29,7 @@ jobs:
       - name: Smoke test
         run: |
           docker run -d --name tv -p 8080:8080 youtube-tv:test
-          for i in $(seq 15); do curl -fsS localhost:8080/api/channels && exit 0; sleep 1; done
+          for i in $(seq 15); do curl -fsS localhost:8080/api/schedule && exit 0; sleep 1; done
           docker logs tv
           exit 1
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { go } from './api.ts';
+import Admin from './Admin.tsx';
 import Home from './Home.tsx';
 import Player from './Player.tsx';
-import Settings from './Settings.tsx';
 import './style.css';
 
 function App() {
@@ -24,7 +24,8 @@ function App() {
     };
   }, []);
   if (path === '/') return <Home />;
-  if (path === '/settings') return <Settings />;
+  if (path === '/admin') return <Admin page="channels" />;
+  if (path === '/admin/viewers') return <Admin page="viewers" />;
   return <Player key={path} slug={path.slice(1)} />;
 }
 

@@ -1,5 +1,5 @@
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
-export type Lineup = { id: number; name: string; slug: string; slots: Slot[] };
+export type Lineup = { id: number; name: string; slug: string; slots: Slot[]; watched: number };
 export type Source = { id: number; kind: 'youtube_channel' | 'playlist' | 'list'; label: string; share: number; videos: number };
 export type Channel = {
   id: number;
@@ -34,10 +34,24 @@ export function go(path: string) {
 let skew = 0; // server clock minus this machine's clock, so every Screen agrees on what is Live
 export const now = () => Date.now() + skew;
 
+// Total time every Screen has had a Channel playing, e.g. "45 min" or "12.5 h"
+export const watched = (seconds: number) => seconds < 3600 ? `${Math.round(seconds / 60)} min` : `${(seconds / 3600).toFixed(1)} h`;
+
+// The Admin password, remembered on this Screen once it's right
+let password = '';
+try { password = localStorage.getItem('adminPassword') ?? ''; } catch { /* storage blocked */ }
+export function setPassword(p: string) {
+  password = p;
+  try { localStorage.setItem('adminPassword', p); } catch { /* storage blocked */ }
+}
+
 export async function api<T = null>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const res = await fetch('/api/' + path, {
     method,
-    headers: body === undefined ? {} : { 'content-type': 'application/json' },
+    headers: {
+      ...body === undefined ? {} : { 'content-type': 'application/json' },
+      ...password ? { authorization: `Bearer ${encodeURIComponent(password)}` } : {},
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();

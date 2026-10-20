@@ -5,12 +5,12 @@ Live, TV-style Channels made from YouTube videos, for one household. Terms are d
 ## Run it
 
 1. Get a YouTube Data API v3 key: [Google Cloud console](https://console.cloud.google.com/) → new project → enable **YouTube Data API v3** → Credentials → Create API key.
-2. Next to `docker-compose.yml`, create `.env` containing `YOUTUBE_API_KEY=your-key`.
-3. `docker compose up -d`, open `http://<server-ip>:2345`, then **Settings** → add a Channel → add a Source. To use another port, add `WEB_PORT=1234` to `.env`.
+2. Next to `docker-compose.yml`, create `.env` containing `YOUTUBE_API_KEY=your-key` and `ADMIN_PASSWORD=pick-one`.
+3. `docker compose up -d`, open `http://<server-ip>:2345`, then **Admin** → log in → add a Channel → add a Source. To use another port, add `WEB_PORT=1234` to `.env`.
 
 Update: `docker compose pull && docker compose up -d`. Everything is stored in the `youtube-tv-data` volume.
 
-There is no login: anyone who can reach the port can edit Channels. Keep it on your home network.
+Only Admin (`/admin`: Channels and Viewers) needs the password; watching needs none. Viewers shows each IP's viewing time per Channel with a rough location looked up from ip-api.com. Keep it on your home network.
 
 ## Controls
 

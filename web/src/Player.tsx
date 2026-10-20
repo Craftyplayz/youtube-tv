@@ -24,9 +24,11 @@ for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => { in
 const UNPLAYABLE = [100, 101, 150]; // removed, private, or embedding disabled
 const POPOUT = 'youtube-tv-popout'; // one shared window name, so popping out again reuses the same small window
 const LIVE_WITHIN = 15_000;
+const DRIFT_WITHIN = 30_000;
 const TIMED_FOR = 8; // seconds a Timed comment stays up
 const TIMED_MAX = 3; // on screen at once
 const LEAD_IN = 5; // seconds a jump to a Timed comment lands before its moment
+const WATCH_EVERY = 30_000; // how often a playing Screen adds to its Channel's viewing time; matches the server
 
 function clock(ms: number) {
   const s = Math.round(Math.abs(ms) / 1000);
@@ -96,8 +98,18 @@ export default function Player({ slug }: { slug: string }) {
     schedule(now(), now() + 1).then(setLineups);
     const t = setInterval(() => {
       const time = yt.current?.getCurrentTime?.();
-      if (time !== undefined) setPos(time);
+      if (time === undefined) return;
+      setPos(time);
+      // Near Live, play 5% fast or slow to drift back onto it unnoticed; further off is a deliberate Time-shift and stays at normal speed
+      const slot = cur.current.slot;
+      const shift = slot ? slot.start + time * 1000 - now() : 0;
+      const rate = Math.abs(shift) < DRIFT_WITHIN && Math.abs(shift) > 500 ? (shift < 0 ? 1.05 : 0.95) : 1;
+      if (yt.current.getPlaybackRate?.() !== rate) yt.current.setPlaybackRate(rate);
     }, 500);
+    const watching = setInterval(() => {
+      if (cur.current.channel && yt.current?.getPlayerState?.() === window.YT.PlayerState.PLAYING)
+        api(`channels/${cur.current.channel}/watch`, 'POST').catch(() => {});
+    }, WATCH_EVERY);
     const onFullscreen = () => {
       setFullscreen(!!document.fullscreenElement);
       // YouTube's player brings its own captions back after resizing into or out of full screen; restore the viewer's choice once it settles
@@ -108,6 +120,7 @@ export default function Player({ slug }: { slug: string }) {
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       clearInterval(t);
+      clearInterval(watching);
       clearTimeout(hideTimer.current);
       setIcon();
       removeEventListener('fullscreenchange', onFullscreen);

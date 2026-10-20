@@ -49,6 +49,7 @@ export default function Settings() {
     <main className="settings">
       <header>
         <h1>Channels</h1>
+        <a href="/admin/viewers">Viewers</a>
         <a href="/">Back to Channels</a>
         <button onClick={newChannel} disabled={busy}>+ New Channel</button>
       </header>

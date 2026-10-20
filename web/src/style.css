@@ -175,6 +175,7 @@ button:disabled { opacity: .4; cursor: default; }
 .channel-card img, .channel-card .off { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: grid; place-content: center; background: #000; color: var(--dim); }
 .card-name { padding: 0 12px; font-size: 1.15rem; font-weight: 700; }
 .card-name b { margin-right: 8px; color: var(--accent); }
+.card-watched { padding: 0 12px; color: var(--dim); font-size: 0.85rem; }
 .card-now { padding: 0 12px; overflow: hidden; color: var(--dim); white-space: nowrap; text-overflow: ellipsis; }
 .channel-card progress { width: calc(100% - 24px); height: 4px; margin: 0 12px; accent-color: var(--accent); }
 
@@ -182,6 +183,9 @@ button:disabled { opacity: .4; cursor: default; }
 .settings { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
 .settings header { display: flex; gap: 12px; align-items: center; }
 .settings h1 { margin-right: auto; }
+.login { display: flex; gap: 8px; margin: 24px 0; }
+.login input { flex: 1; }
+.row .dim { flex: 1; color: var(--dim); }
 .channel { display: grid; gap: 12px; margin: 12px 0; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
 .channel-body { display: grid; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .channel-body[hidden] { display: none; }

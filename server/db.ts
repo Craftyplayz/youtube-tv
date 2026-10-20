@@ -61,6 +61,13 @@ export function openDb(file: string): Db {
       video_id TEXT NOT NULL,
       PRIMARY KEY (channel_id, video_id)
     );
+    CREATE TABLE IF NOT EXISTS watch (
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      ip TEXT NOT NULL,
+      seconds INTEGER NOT NULL,                   -- total time this IP has had the Channel playing
+      last_at INTEGER NOT NULL,
+      PRIMARY KEY (channel_id, ip)
+    );
   `);
   // Columns added later: CREATE TABLE IF NOT EXISTS leaves existing tables as they were
   for (const [table, column] of [
