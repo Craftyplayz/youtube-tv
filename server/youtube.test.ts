@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { splitSources } from './youtube.ts';
+
+test('pasted lines: each YouTube channel and playlist stands alone, videos share one list', () => {
+  assert.deepEqual(splitSources(`
+    @LinusTechTips
+    https://youtu.be/dQw4w9WgXcQ
+    https://www.youtube.com/playlist?list=PL123
+    https://www.youtube.com/channel/UCXuqSBlHAE6Xw-yeJA0Tunw
+
+    https://www.youtube.com/watch?v=9bZkp7q19f0
+  `), [
+    '@LinusTechTips',
+    'https://www.youtube.com/playlist?list=PL123',
+    'https://www.youtube.com/channel/UCXuqSBlHAE6Xw-yeJA0Tunw',
+    'https://youtu.be/dQw4w9WgXcQ\nhttps://www.youtube.com/watch?v=9bZkp7q19f0',
+  ]);
+  assert.deepEqual(splitSources(' \n '), []);
+});

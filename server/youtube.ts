@@ -112,6 +112,14 @@ export function avatar(videoId: string) {
   return avatars.get(videoId)!;
 }
 
+// A pasted block, one Source per line: each YouTube channel or playlist line stands alone, every other line joins one hand-picked list
+export function splitSources(input: string): string[] {
+  const lines = input.split('\n').map(l => l.trim()).filter(Boolean);
+  const own = (l: string) => /[?&]list=|\bUC[\w-]{22}\b|@[\w.-]/.test(l);
+  const videos = lines.filter(l => !own(l));
+  return [...lines.filter(own), ...(videos.length ? [videos.join('\n')] : [])];
+}
+
 // Turns whatever was pasted into the settings page into a Source
 export async function resolveSource(input: string): Promise<Pick<Source, 'kind' | 'ref' | 'label'>> {
   const text = input.trim();

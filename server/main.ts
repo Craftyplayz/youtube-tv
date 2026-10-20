@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join } from 'node:path';
 import { openDb } from './db.ts';
 import { queueNewUploads, schedule, type Channel } from './schedule.ts';
-import { avatar, refreshChannel, refreshSource, resolveSource, type Source } from './youtube.ts';
+import { avatar, refreshChannel, refreshSource, resolveSource, splitSources, type Source } from './youtube.ts';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const DATA_DIR = process.env.DATA_DIR ?? 'data';
@@ -59,10 +59,9 @@ const routes: Route[] = [
       FROM sources WHERE channel_id = ? ORDER BY position, id`).all(c.id),
   }))],
 
-  ['POST', /^\/api\/channels$/, (_, b) => {
-    db.prepare('INSERT INTO channels (name, position) VALUES (?, (SELECT COALESCE(MAX(position), 0) + 1 FROM channels))').run(freeSlug(name(b.name), 0));
-    return null;
-  }],
+  ['POST', /^\/api\/channels$/, (_, b) => db.prepare(
+    'INSERT INTO channels (name, position) VALUES (?, (SELECT COALESCE(MAX(position), 0) + 1 FROM channels)) RETURNING id',
+  ).get(freeSlug(name(b.name), 0))],
 
   ['PUT', /^\/api\/channels\/(\d+)$/, ([id], b) => {
     const c = { ...channel(id), ...b };
@@ -82,13 +81,26 @@ const routes: Route[] = [
 
   ['POST', /^\/api\/channels\/(\d+)\/sources$/, async ([id], b) => {
     const c = channel(id);
-    const s = await resolveSource(String(b.input ?? ''));
-    const src = db.prepare(`
-      INSERT INTO sources (channel_id, kind, ref, label, position, added_at)
-      VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM sources WHERE channel_id = ?), ?) RETURNING *`)
-      .get(c.id, s.kind, s.ref, s.label, c.id, Date.now()) as Source;
-    await refreshSource(db, src);
-    return null;
+    const inputs = splitSources(String(b.input ?? ''));
+    if (!inputs.length) throw new BadRequest('Paste a YouTube channel, playlist or video');
+    // Lines that can't be resolved come back so the page can leave them in the box to fix
+    const failed: string[] = [], errors: string[] = [];
+    for (const input of inputs) {
+      let s;
+      try {
+        s = await resolveSource(input);
+      } catch (e) {
+        failed.push(input);
+        errors.push(`${input.split('\n')[0]}: ${(e as Error).message}`);
+        continue;
+      }
+      const src = db.prepare(`
+        INSERT INTO sources (channel_id, kind, ref, label, position, added_at)
+        VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM sources WHERE channel_id = ?), ?) RETURNING *`)
+        .get(c.id, s.kind, s.ref, s.label, c.id, Date.now()) as Source;
+      await refreshSource(db, src).catch(e => errors.push(`${s.label}: ${e.message}`));
+    }
+    return { failed: failed.join('\n'), error: errors.join('\n') };
   }],
 
   ['DELETE', /^\/api\/sources\/(\d+)$/, ([id]) => {
