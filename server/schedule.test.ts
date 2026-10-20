@@ -67,6 +67,13 @@ test('New uploads wait for Tune in, then air after the current Slot, oldest firs
   assert.deepEqual(ids(db, NOW + 40 * MIN).slice(0, 3), [before[0], 'new1', 'new2']);
 });
 
+test('Excluded videos never air on that Channel again', () => {
+  const db = setup('shuffle');
+  addSource(db, 'list', NOW - DAY, recent('a', 'b'));
+  db.exec("INSERT INTO exclusions (channel_id, video_id) VALUES (1, 'a')");
+  assert.deepEqual(ids(db, NOW + 30 * MIN), ['b', 'b', 'b']);
+});
+
 test('Filters keep Shorts, long videos and blocked words off a Channel', () => {
   const db = setup('shuffle');
   db.exec("UPDATE channels SET max_minutes = 60, blocked_words = 'Sponsor, q&a'");

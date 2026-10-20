@@ -29,9 +29,12 @@ button:disabled { opacity: .4; cursor: default; }
 .hud {
   position: absolute; inset: auto 0 0 0; padding: 24px 32px; gap: 16px;
   display: flex; justify-content: space-between; align-items: end;
-  background: linear-gradient(transparent, rgb(0 0 0 / .85)); transition: opacity .4s;
+  background: linear-gradient(transparent, rgb(0 0 0 / .85)); transition: opacity .25s;
 }
 .hud.hidden { opacity: 0; pointer-events: none; }
+.hud nav button.on { background: var(--text); color: var(--bg); }
+.volume { display: flex; align-items: center; gap: 6px; }
+.volume input { width: 110px; padding: 0; border: 0; background: none; accent-color: var(--accent); }
 .now-playing { display: grid; gap: 4px; }
 .now-playing .ch { font-size: 1.6rem; font-weight: 700; }
 .shift { justify-self: start; padding: 2px 8px; border-radius: 4px; background: var(--panel); font-variant-numeric: tabular-nums; }
@@ -43,24 +46,47 @@ button:disabled { opacity: .4; cursor: default; }
 .guide { position: fixed; inset: 0; display: grid; align-content: center; padding: 32px 0; background: rgb(0 0 0 / .8); }
 .guide-grid { overflow: auto; max-height: calc(100vh - 64px); background: var(--bg); }
 .guide-loading { padding: 16px; }
-.guide-row { position: relative; height: 60px; border-bottom: 1px solid var(--line); }
-.guide-times { position: sticky; top: 0; z-index: 3; height: 32px; background: var(--bg); }
-.guide-times span { position: absolute; top: 8px; padding-left: 4px; border-left: 1px solid var(--line); color: var(--dim); font-size: .85rem; }
+.guide-row { position: relative; height: 104px; border-bottom: 1px solid var(--line); }
+.guide-times { position: sticky; top: 0; z-index: 3; height: 40px; background: var(--bg); }
+.guide-times span { position: absolute; top: 10px; padding-left: 6px; border-left: 1px solid var(--line); color: var(--dim); }
 .guide-name {
-  position: sticky; left: 0; z-index: 2; width: 180px; height: 100%; padding: 0 12px;
-  display: flex; align-items: center; gap: 6px; background: var(--panel); font-weight: 600;
+  position: sticky; left: 0; z-index: 2; width: 200px; height: 100%; padding: 0 16px;
+  display: flex; align-items: center; gap: 12px; background: var(--panel); font-size: 1.1rem; font-weight: 600;
 }
-.guide-name small { color: var(--dim); font-weight: 400; }
-.guide-row.current .guide-name { color: var(--accent); }
+.guide-times .guide-name { flex-direction: column; align-items: start; justify-content: center; gap: 0; }
+.guide-name small { color: var(--dim); font-size: .7rem; font-weight: 400; }
+.guide-number { min-width: 1.5ch; color: var(--dim); font-size: 2rem; font-weight: 800; }
+.guide-row.current .guide-name, .guide-row.current .guide-number { color: var(--accent); }
 .guide-row button {
-  position: absolute; top: 4px; bottom: 4px; padding: 4px 8px; overflow: hidden;
-  display: grid; align-content: center; text-align: left; white-space: nowrap;
+  position: absolute; top: 5px; bottom: 5px; padding: 8px; overflow: hidden; isolation: isolate;
+  display: grid; align-content: end; gap: 2px; text-align: left; white-space: nowrap; border-radius: 8px;
 }
-.guide-row button b, .guide-row button small { overflow: hidden; text-overflow: ellipsis; }
-.guide-row button small { color: var(--dim); }
-.guide-row button.past { opacity: .55; }
-.guide-row button.on { border-color: var(--accent); }
-.off-air { position: absolute; left: 200px; top: 20px; color: var(--dim); }
+.guide-row button img { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }
+.guide-row button::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent 30%, rgb(0 0 0 / .9)); }
+.guide-row button:hover img { transform: scale(1.06); }
+.guide-row button b, .guide-row button small { overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000; }
+.guide-row button small { color: #ccc; }
+.guide-row button.past img { filter: grayscale(.8) brightness(.6); }
+.guide-row button.on { border: 2px solid var(--accent); }
+.now-line { position: absolute; top: 0; bottom: 0; z-index: 1; width: 2px; background: var(--accent); pointer-events: none; }
+.off-air { position: absolute; left: 220px; top: 40px; color: var(--dim); }
+
+/* Channel list */
+.home { max-width: 1200px; margin: 0 auto; padding: 24px 16px 64px; }
+.home header { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.home h1 { margin: 0 auto 0 0; }
+.home input[type=search] { flex: 1 1 280px; max-width: 480px; padding: 10px 14px; font-size: 1.1rem; }
+.channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 24px 0 0; padding: 0; list-style: none; }
+.channel-card {
+  display: grid; gap: 6px; padding-bottom: 12px; overflow: hidden; text-decoration: none;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+}
+.channel-card:hover, .channel-card:focus-visible { border-color: var(--accent); }
+.channel-card img, .channel-card .off { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: grid; place-content: center; background: #000; color: var(--dim); }
+.card-name { padding: 0 12px; font-size: 1.15rem; font-weight: 700; }
+.card-name b { margin-right: 8px; color: var(--accent); }
+.card-now { padding: 0 12px; overflow: hidden; color: var(--dim); white-space: nowrap; text-overflow: ellipsis; }
+.channel-card progress { width: calc(100% - 24px); height: 4px; margin: 0 12px; accent-color: var(--accent); }
 
 /* Settings */
 .settings { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }

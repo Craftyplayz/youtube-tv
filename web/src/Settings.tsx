@@ -41,7 +41,7 @@ export default function Settings() {
     <main className="settings">
       <header>
         <h1>Channels</h1>
-        <a href="#/">Back to TV</a>
+        <a href="/">Back to Channels</a>
       </header>
       {error && <p className="error">{error}</p>}
       {busy && <p className="busy">Working… adding a big YouTube channel can take a minute.</p>}
@@ -56,6 +56,7 @@ export default function Settings() {
             <div className="row">
               <span className="number">{i + 1}</span>
               <input name="name" defaultValue={c.name} required aria-label="Channel name" />
+              <a href={'/' + c.slug}>/{c.slug}</a>
               <button type="button" disabled={i === 0} onClick={() => swap(c, channels[i - 1])} aria-label="Move up">↑</button>
               <button type="button" disabled={i === channels.length - 1} onClick={() => swap(c, channels[i + 1])} aria-label="Move down">↓</button>
               <button type="button" onClick={() => confirm(`Delete ${c.name}?`) && run(() => api(`channels/${c.id}`, 'DELETE'))}>Delete</button>

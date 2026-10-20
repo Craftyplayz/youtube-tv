@@ -1,9 +1,10 @@
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
-export type Lineup = { id: number; name: string; slots: Slot[] };
+export type Lineup = { id: number; name: string; slug: string; slots: Slot[] };
 export type Source = { id: number; kind: 'youtube_channel' | 'playlist' | 'list'; label: string; videos: number };
 export type Channel = {
   id: number;
   name: string;
+  slug: string;
   position: number;
   ordering: 'shuffle' | 'new_first' | 'fixed';
   recent_ratio: number;
@@ -14,6 +15,14 @@ export type Channel = {
   blocked_words: string;
   sources: Source[];
 };
+
+export const thumb = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+
+// Switches page without reloading, so the click still counts as the gesture browsers require before playing sound
+export function go(path: string) {
+  history.pushState(null, '', path);
+  dispatchEvent(new PopStateEvent('popstate'));
+}
 
 let skew = 0; // server clock minus this machine's clock, so every Screen agrees on what is Live
 export const now = () => Date.now() + skew;

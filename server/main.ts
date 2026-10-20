@@ -31,6 +31,17 @@ function name(v: unknown) {
   if (typeof v !== 'string' || !v.trim()) throw new BadRequest('Channel name is required');
   return v.trim().slice(0, 100);
 }
+// Each Channel's page address, e.g. "Tech" → tech-tv; the -tv ending keeps it clear of /settings and /api
+function slug(channelName: string, id: number) {
+  const base = channelName.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `channel-${id}`;
+  return /(^|-)tv$/.test(base) ? base : `${base}-tv`;
+}
+function freeSlug(channelName: string, id: number) {
+  const s = slug(channelName, id);
+  if (channels().some(c => c.id !== id && slug(c.name, c.id) === s)) throw new BadRequest(`Another Channel already uses /${s}`);
+  return channelName;
+}
 function num(v: unknown, min: number) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
@@ -42,13 +53,14 @@ type Route = [method: string, path: RegExp, handler: (params: string[], body: an
 const routes: Route[] = [
   ['GET', /^\/api\/channels$/, () => channels().map(c => ({
     ...c,
+    slug: slug(c.name, c.id),
     sources: db.prepare(`
       SELECT id, kind, label, (SELECT COUNT(*) FROM source_videos WHERE source_id = sources.id) AS videos
       FROM sources WHERE channel_id = ? ORDER BY position, id`).all(c.id),
   }))],
 
   ['POST', /^\/api\/channels$/, (_, b) => {
-    db.prepare('INSERT INTO channels (name, position) VALUES (?, (SELECT COALESCE(MAX(position), 0) + 1 FROM channels))').run(name(b.name));
+    db.prepare('INSERT INTO channels (name, position) VALUES (?, (SELECT COALESCE(MAX(position), 0) + 1 FROM channels))').run(freeSlug(name(b.name), 0));
     return null;
   }],
 
@@ -58,7 +70,7 @@ const routes: Route[] = [
     db.prepare(`
       UPDATE channels SET name = ?, position = ?, ordering = ?, recent_ratio = ?, recent_days = ?,
         skip_shorts = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
-      name(c.name), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
+      freeSlug(name(c.name), Number(id)), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
       c.skip_shorts ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
     return null;
   }],
@@ -99,8 +111,16 @@ const routes: Route[] = [
     const only = url.searchParams.get('channel');
     return {
       now,
-      channels: channels().filter(c => !only || c.id === Number(only)).map(c => ({ id: c.id, name: c.name, slots: schedule(db, c, from, to, now) })),
+      channels: channels().filter(c => !only || c.id === Number(only))
+        .map(c => ({ id: c.id, name: c.name, slug: slug(c.name, c.id), slots: schedule(db, c, from, to, now) })),
     };
+  }],
+
+  ['POST', /^\/api\/channels\/(\d+)\/exclusions$/, ([id], b) => {
+    const c = channel(id);
+    if (typeof b.videoId !== 'string' || !/^[\w-]{11}$/.test(b.videoId)) throw new BadRequest('Bad video id');
+    db.prepare('INSERT OR IGNORE INTO exclusions (channel_id, video_id) VALUES (?, ?)').run(c.id, b.videoId);
+    return null;
   }],
 
   ['POST', /^\/api\/videos\/([\w-]{11})\/broken$/, ([id]) => {

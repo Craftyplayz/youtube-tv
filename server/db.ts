@@ -51,6 +51,11 @@ export function openDb(file: string): Db {
       video_id TEXT NOT NULL,
       PRIMARY KEY (channel_id, start_at)
     );
+    CREATE TABLE IF NOT EXISTS exclusions (
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      video_id TEXT NOT NULL,
+      PRIMARY KEY (channel_id, video_id)
+    );
     CREATE TABLE IF NOT EXISTS queue (
       channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
       video_id TEXT NOT NULL,

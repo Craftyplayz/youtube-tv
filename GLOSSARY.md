@@ -22,6 +22,10 @@ _Avoid_: Channel (on its own), creator
 A Channel's rule that keeps certain videos off it: Shorts, too long, too old, or a blocked keyword in the title.
 _Avoid_: Exclusion, block rule
 
+**Excluded video**:
+A video someone removed from one Channel for good; it never airs on that Channel again.
+_Avoid_: Banned, blocked, hidden video
+
 **Ordering**:
 A Channel's own rule for the sequence its videos air in: Shuffle, New uploads first, or Fixed order.
 _Avoid_: Sort, play mode

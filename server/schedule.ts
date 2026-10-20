@@ -25,6 +25,7 @@ function pool(db: Db, ch: Channel, now: number): Video[] {
     SELECT v.id, v.title, v.channel_title, v.published_at, v.duration, v.is_short, s.added_at
     FROM sources s JOIN source_videos sv ON sv.source_id = s.id JOIN videos v ON v.id = sv.video_id
     WHERE s.channel_id = ? AND v.playable = 1 AND v.duration > 0
+      AND NOT EXISTS (SELECT 1 FROM exclusions e WHERE e.channel_id = s.channel_id AND e.video_id = v.id)
     ORDER BY s.position, s.id, CASE s.kind WHEN 'youtube_channel' THEN v.published_at ELSE sv.position END`).all(ch.id) as Video[];
   const words = ch.blocked_words.toLowerCase().split(',').map(w => w.trim()).filter(Boolean);
   const seen = new Set<string>();
