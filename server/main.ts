@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join } from 'node:path';
 import { openDb } from './db.ts';
 import { queueNewUploads, schedule, type Channel } from './schedule.ts';
-import { comments, refreshChannel, refreshSource, replies, resolveSource, splitSources, uploader, type Source } from './youtube.ts';
+import { comments, refreshChannel, refreshSource, replies, resolveSource, splitSources, timedComments, uploader, type Source } from './youtube.ts';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const DATA_DIR = process.env.DATA_DIR ?? 'data';
@@ -142,7 +142,10 @@ const routes: Route[] = [
 
   ['GET', /^\/api\/videos\/([\w-]{11})\/uploader$/, ([id]) => uploader(id)],
 
-  ['GET', /^\/api\/videos\/([\w-]{11})\/comments$/, ([id], _, url) => comments(id, url.searchParams.get('page') ?? '')],
+  ['GET', /^\/api\/videos\/([\w-]{11})\/comments$/, ([id], _, url) =>
+    comments(id, url.searchParams.get('page') ?? '', url.searchParams.get('order') === 'time' ? 'time' : 'relevance')],
+
+  ['GET', /^\/api\/videos\/([\w-]{11})\/timed-comments$/, ([id]) => timedComments(id)],
 
   ['GET', /^\/api\/comments\/([\w-]+)\/replies$/, ([id], _, url) => replies(id, url.searchParams.get('page') ?? '')],
 

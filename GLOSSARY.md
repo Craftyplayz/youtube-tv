@@ -89,6 +89,10 @@ Playing the current Slot from its beginning, which Time-shifts the Screen.
 Dropping a Screen's Time-shift back to zero.
 _Avoid_: Catch up, sync
 
+**Timed comment**:
+A top YouTube comment that points at a moment in its video (like 2:34); it pops up on the Screen for a few seconds as that moment plays. Comments with more than three timestamps are chapter lists and never pop up.
+_Avoid_: Live chat, bullet comment
+
 **Guide**:
 The browsable view of every Channel's Schedule, past and future, from which any Slot can be played.
 _Avoid_: EPG, TV guide

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from './api.ts';
 import Icon from './Icon.tsx';
 
-type Comment = { id: string; author: string; avatar: string; text: string; likes: number; at: number; replies: number };
+export type Comment = { id: string; author: string; avatar: string; text: string; likes: number; at: number; replies: number };
 type Page = { comments: Comment[]; next: string | null };
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact' });
@@ -27,7 +27,7 @@ function usePages(path: string) {
     busy.current = true;
     setState(s => ({ ...s, loading: true, error: undefined }));
     try {
-      const r = await api<Page | null>(path + (token.current ? `?page=${encodeURIComponent(token.current)}` : ''));
+      const r = await api<Page | null>(path + (token.current ? `${path.includes('?') ? '&' : '?'}page=${encodeURIComponent(token.current)}` : ''));
       token.current = r ? r.next : null;
       setState(s => r ? { list: [...s.list, ...r.comments] } : { list: [], off: true });
     } catch (e) {
@@ -38,7 +38,7 @@ function usePages(path: string) {
   return { ...state, more, started: token.current !== undefined, done: token.current === null };
 }
 
-function Item({ c, children }: { c: Comment; children?: ReactNode }) {
+export function Item({ c, children }: { c: Comment; children?: ReactNode }) {
   return (
     <li className="comment">
       <img src={c.avatar} alt="" referrerPolicy="no-referrer" />
@@ -78,20 +78,37 @@ function Thread({ c }: { c: Comment }) {
   );
 }
 
+const ORDERS = [['relevance', 'Top'], ['time', 'Newest']] as const;
+
 export default function Comments({ videoId, onClose }: { videoId: string; onClose: () => void }) {
-  const page = usePages(`videos/${videoId}/comments`);
-  useEffect(() => { page.more(); }, []); // the Player keys this by video, so it mounts once per video
+  const [order, setOrder] = useState<(typeof ORDERS)[number][0]>('relevance');
+  return (
+    // Keyed by sort, so switching starts the list over at the top
+    <Feed key={order} path={`videos/${videoId}/comments?order=${order}`}>
+      {/* No focus left on the buttons, or Space would press them again instead of pausing */}
+      <header>
+        <b>Comments</b>
+        <span className="sort">
+          {ORDERS.map(([o, label]) => (
+            <button key={o} className={order === o ? 'on' : ''} aria-pressed={order === o} onClick={() => setOrder(o)} onMouseDown={e => e.preventDefault()}>{label}</button>
+          ))}
+        </span>
+        <button onClick={onClose} onMouseDown={e => e.preventDefault()} title="Close comments" aria-label="Close comments"><Icon name="close" /></button>
+      </header>
+    </Feed>
+  );
+}
+
+function Feed({ path, children }: { path: string; children: ReactNode }) {
+  const page = usePages(path);
+  useEffect(() => { page.more(); }, []); // keyed by video and sort, so it mounts once per list
   return (
     // Loads the next 20 once the viewer scrolls near the bottom
     <aside className="comments" onScroll={e => {
       const el = e.currentTarget;
       if (el.scrollTop + el.clientHeight > el.scrollHeight - 400) page.more();
     }}>
-      <header>
-        <b>Comments</b>
-        {/* No focus left on the button, or Space would press it again instead of pausing */}
-        <button onClick={onClose} onMouseDown={e => e.preventDefault()} title="Close comments" aria-label="Close comments"><Icon name="close" /></button>
-      </header>
+      {children}
       {page.off && <p>Comments are turned off for this video.</p>}
       {page.done && !page.off && !page.list.length && <p>No comments yet.</p>}
       <ul>{page.list.map(c => <Thread key={c.id} c={c} />)}</ul>

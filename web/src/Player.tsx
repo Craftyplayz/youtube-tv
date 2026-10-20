@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { api, go, now, schedule, setIcon, type Lineup, type Slot } from './api.ts';
-import Comments from './Comments.tsx';
+import Comments, { Item, type Comment } from './Comments.tsx';
 import Guide from './Guide.tsx';
 import Icon, { type IconName } from './Icon.tsx';
 
@@ -24,6 +24,7 @@ for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => { in
 const UNPLAYABLE = [100, 101, 150]; // removed, private, or embedding disabled
 const POPOUT = 'youtube-tv-popout'; // one shared window name, so popping out again reuses the same small window
 const LIVE_WITHIN = 15_000;
+const TIMED_FOR = 8; // seconds a Timed comment stays up
 
 function clock(ms: number) {
   const s = Math.round(Math.abs(ms) / 1000);
@@ -71,6 +72,7 @@ export default function Player({ slug }: { slug: string }) {
   const [guide, setGuide] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [uploader, setUploader] = useState<{ videoId: string; channelId: string }>();
+  const [timed, setTimed] = useState<{ videoId: string; list: { second: number; comment: Comment }[] }>();
   const [pos, setPos] = useState(0); // seconds into the current video
   const [ui, setUi] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -134,6 +136,9 @@ export default function Player({ slug }: { slug: string }) {
       if (cur.current.slot !== slot) return; // ignore answers for videos already skipped past
       setIcon(r?.avatar ?? undefined);
       if (r) setUploader({ videoId: slot.videoId, channelId: r.channelId });
+    });
+    api<{ second: number; comment: Comment }[]>(`videos/${slot.videoId}/timed-comments`).catch(() => []).then(list => {
+      if (cur.current.slot === slot) setTimed({ videoId: slot.videoId, list });
     });
   }
 
@@ -400,6 +405,7 @@ export default function Player({ slug }: { slug: string }) {
   const duration = slot ? (slot.end - slot.start) / 1000 : 0;
   const shift = slot ? slot.start + pos * 1000 - now() : 0;
   const isLive = Math.abs(shift) < LIVE_WITHIN;
+  const popping = slot && timed?.videoId === slot.videoId ? timed.list.filter(m => m.second <= pos && pos < m.second + TIMED_FOR).slice(-3) : [];
   const pct = (seconds: number) => `${duration ? (Math.max(0, Math.min(duration, seconds)) / duration) * 100 : 0}%`;
   return (
     <div className={`tv ${background ? 'background' : ''}`} onMouseMove={() => showUi(1500)}>
@@ -499,6 +505,7 @@ export default function Player({ slug }: { slug: string }) {
           </div>
         </div>
       )}
+      {popping.length > 0 && <ul className="timed">{popping.map(m => <Item key={`${m.comment.id}@${m.second}`} c={m.comment} />)}</ul>}
       {/* keyed by video, so each new video starts the panel over at its own first page */}
       {showComments && slot && <Comments key={slot.videoId} videoId={slot.videoId} onClose={() => setShowComments(false)} />}
       {volumeOsd && (

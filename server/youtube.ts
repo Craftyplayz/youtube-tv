@@ -115,10 +115,10 @@ export function uploader(videoId: string) {
 const comment = (id: string, s: any, replies = 0) =>
   ({ id, author: s.authorDisplayName, avatar: s.authorProfileImageUrl, text: s.textDisplay, likes: s.likeCount, at: Date.parse(s.publishedAt), replies });
 
-// One page of a video's top comments for the player's Comments panel, or null when its uploader turned comments off
-export async function comments(videoId: string, pageToken: string) {
+// One page of a video's top or newest comments for the player's Comments panel, or null when its uploader turned comments off
+export async function comments(videoId: string, pageToken: string, order: 'relevance' | 'time' = 'relevance', max = 20) {
   try {
-    const r = await yt('commentThreads', { part: 'snippet', videoId, order: 'relevance', maxResults: '20', textFormat: 'plainText', pageToken });
+    const r = await yt('commentThreads', { part: 'snippet', videoId, order, maxResults: String(max), textFormat: 'plainText', pageToken });
     return {
       comments: (r?.items ?? []).map((t: any) => comment(t.id, t.snippet.topLevelComment.snippet, t.snippet.totalReplyCount)),
       next: r?.nextPageToken ?? null,
@@ -127,6 +127,35 @@ export async function comments(videoId: string, pageToken: string) {
     if ((e as Error).message.includes('commentsDisabled')) return null;
     throw e;
   }
+}
+
+// The seconds a comment points at, like 2:34 or 1:02:03, each once
+export function timestamps(text: string) {
+  return [...new Set([...text.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):([0-5]\d)\b/g)].map(([, h = '0', m, s]) => (+h * 60 + +m) * 60 + +s))];
+}
+
+// Top comments that point at a moment in their video, soonest first, for Timed comments; remembered until the server restarts
+const timed = new Map<string, Promise<{ second: number; comment: ReturnType<typeof comment> }[]>>();
+export function timedComments(videoId: string) {
+  if (!timed.has(videoId)) timed.set(videoId, (async () => {
+    const found: { second: number; comment: ReturnType<typeof comment> }[] = [];
+    let pageToken = '';
+    // shortcut: reads only the top 300 comments (3 quota units per video); read more pages if good ones are missed
+    for (let i = 0; i < 3; i++) {
+      const page = await comments(videoId, pageToken, 'relevance', 100);
+      for (const c of page?.comments ?? []) {
+        const seconds = timestamps(c.text);
+        if (seconds.length <= 3) for (const second of seconds) found.push({ second, comment: c }); // more is a chapter list, not a reaction
+      }
+      if (!page?.next) break;
+      pageToken = page.next;
+    }
+    return found.sort((a, b) => a.second - b.second);
+  })().catch(e => {
+    timed.delete(videoId); // a failed lookup is retried next time
+    throw e;
+  }));
+  return timed.get(videoId)!;
 }
 
 // One page of the replies under a comment

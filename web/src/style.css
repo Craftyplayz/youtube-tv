@@ -89,6 +89,9 @@ button:disabled { opacity: .4; cursor: default; }
 }
 .comments header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 12px 0; background: rgb(15 15 15); font-size: 1.1rem; }
 .comments header button { display: grid; padding: 4px; background: none; border: 0; }
+.comments .sort { display: flex; gap: 8px; margin: 0 auto 0 16px; }
+.comments .sort button { padding: 4px 12px; border-radius: 8px; background: rgb(255 255 255 / .1); font-size: .85rem; font-weight: 500; }
+.comments .sort button.on { background: #f1f1f1; color: #0f0f0f; }
 /* Laid out like YouTube's: avatar beside the text, replies indented under the comment's text with smaller avatars */
 .comments ul { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
 .comment { display: flex; gap: 12px; font-size: .9rem; }
@@ -106,6 +109,15 @@ button:disabled { opacity: .4; cursor: default; }
   background: none; color: #3ea6ff; font-size: .85rem; font-weight: 600;
 }
 .replies-toggle:hover { background: rgb(62 166 255 / .2); }
+/* Timed comments rise above the controls while their moment plays; clicks pass through to the video */
+.timed {
+  position: absolute; left: 24px; bottom: 88px; display: grid; gap: 8px; width: min(380px, calc(100% - 48px));
+  margin: 0; padding: 0; list-style: none; pointer-events: none;
+}
+.timed .comment { padding: 10px 12px; border-radius: 12px; background: rgb(15 15 15 / .85); animation: rise .3s ease-out; }
+.timed .comment p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.timed small { color: var(--dim); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 @keyframes osd { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes flash { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
 

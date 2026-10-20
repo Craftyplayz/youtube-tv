@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { splitSources } from './youtube.ts';
+import { splitSources, timestamps } from './youtube.ts';
+
+test('timestamps: the seconds a comment points at, each once', () => {
+  assert.deepEqual(timestamps('0:45 lol\nand at 1:02:03, then 0:45 again'), [45, 3723]);
+  assert.deepEqual(timestamps('not 12:345, 3:60 or 10:30pm'), []);
+});
 
 test('pasted lines: each YouTube channel and playlist stands alone, videos share one list', () => {
   assert.deepEqual(splitSources(`
