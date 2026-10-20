@@ -112,6 +112,29 @@ export function avatar(videoId: string) {
   return avatars.get(videoId)!;
 }
 
+const comment = (id: string, s: any, replies = 0) =>
+  ({ id, author: s.authorDisplayName, avatar: s.authorProfileImageUrl, text: s.textDisplay, likes: s.likeCount, at: Date.parse(s.publishedAt), replies });
+
+// One page of a video's top comments for the player's Comments panel, or null when its uploader turned comments off
+export async function comments(videoId: string, pageToken: string) {
+  try {
+    const r = await yt('commentThreads', { part: 'snippet', videoId, order: 'relevance', maxResults: '20', textFormat: 'plainText', pageToken });
+    return {
+      comments: (r?.items ?? []).map((t: any) => comment(t.id, t.snippet.topLevelComment.snippet, t.snippet.totalReplyCount)),
+      next: r?.nextPageToken ?? null,
+    };
+  } catch (e) {
+    if ((e as Error).message.includes('commentsDisabled')) return null;
+    throw e;
+  }
+}
+
+// One page of the replies under a comment
+export async function replies(parentId: string, pageToken: string) {
+  const r = await yt('comments', { part: 'snippet', parentId, maxResults: '20', textFormat: 'plainText', pageToken });
+  return { comments: (r?.items ?? []).map((c: any) => comment(c.id, c.snippet)), next: r?.nextPageToken ?? null };
+}
+
 // A pasted block, one Source per line: each YouTube channel or playlist line stands alone, every other line joins one hand-picked list
 export function splitSources(input: string): string[] {
   const lines = input.split('\n').map(l => l.trim()).filter(Boolean);

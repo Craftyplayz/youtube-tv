@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { api, go, now, schedule, setIcon, type Lineup, type Slot } from './api.ts';
+import Comments from './Comments.tsx';
 import Guide from './Guide.tsx';
 import Icon, { type IconName } from './Icon.tsx';
 
@@ -63,6 +64,7 @@ export default function Player({ slug }: { slug: string }) {
   const [lineups, setLineups] = useState<Lineup[] | null>(null);
   const [started, setStarted] = useState(false);
   const [guide, setGuide] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const [pos, setPos] = useState(0); // seconds into the current video
   const [ui, setUi] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -449,6 +451,7 @@ export default function Player({ slug }: { slug: string }) {
               <span className="spacer" />
               <Ctl icon="block" label="Exclude: never show this video on this Channel again" onClick={exclude} disabled={!slot} />
               <Ctl icon="guide" label="Guide (g)" onClick={() => setGuide(true)} />
+              <Ctl icon="comments" label="Comments" onClick={() => setShowComments(s => !s)} className={showComments ? 'on' : ''} aria-pressed={showComments} disabled={!slot} />
               <Ctl icon="cc" label="Captions (c)" onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} />
               <Ctl icon="home" label="Channels (Esc)" onClick={() => go('/')} />
               <Ctl icon={fullscreen ? 'fullscreenExit' : 'fullscreen'} label={fullscreen ? 'Exit full screen (f)' : 'Full screen (f)'} onClick={toggleFullscreen} />
@@ -456,6 +459,8 @@ export default function Player({ slug }: { slug: string }) {
           </div>
         </div>
       )}
+      {/* keyed by video, so each new video starts the panel over at its own first page */}
+      {showComments && slot && <Comments key={slot.videoId} videoId={slot.videoId} onClose={() => setShowComments(false)} />}
       {volumeOsd && (
         <div key={volumeOsd.key} className="volume-osd" onAnimationEnd={() => setVolumeOsd(null)}>{volumeOsd.level}</div>
       )}
