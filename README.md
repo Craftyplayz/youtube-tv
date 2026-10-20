@@ -18,7 +18,7 @@ The home page lists every Channel with a search bar; each Channel has its own pa
 
 The player copies YouTube's: click to pause, double-click for full screen, drag the red bar to seek, click **● LIVE** to catch up. Move the mouse to show the controls, including **Exclude** (never show this video on this Channel again).
 
-↑ ↓ change Channel · ← → skip 5s · Space/K pause · M mute · C captions · F full screen · G Guide · R Restart · L Go live · Esc back to Channels · hold right-click and scroll for volume
+↑ ↓ change Channel · ← → skip 5s · Shift+N / Shift+P next / previous video · Space/K pause · M mute · C captions · F full screen · G Guide · R Restart · L Go live · Esc back to Channels · hold right-click and scroll for volume
 
 ## Develop
 

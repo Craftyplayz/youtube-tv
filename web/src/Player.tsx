@@ -81,7 +81,11 @@ export default function Player({ slug }: { slug: string }) {
       const time = yt.current?.getCurrentTime?.();
       if (time !== undefined) setPos(time);
     }, 500);
-    const onFullscreen = () => setFullscreen(!!document.fullscreenElement);
+    const onFullscreen = () => {
+      setFullscreen(!!document.fullscreenElement);
+      // YouTube's player brings its own captions back after resizing into or out of full screen; restore the viewer's choice once it settles
+      for (const ms of [300, 1000]) setTimeout(() => applyCaptions(captionsOn.current), ms);
+    };
     addEventListener('fullscreenchange', onFullscreen);
     return () => {
       clearInterval(t);
@@ -139,6 +143,14 @@ export default function Player({ slug }: { slug: string }) {
     play(channel, (i >= 0 ? slots[i + 1] : slots.find(s => s.start <= slot.end && s.end > slot.end)) ?? null, true);
   }
 
+  async function previous() {
+    const { channel, slot } = cur.current;
+    if (!slot) return;
+    const [l] = await schedule(slot.start - 12 * 3_600_000, slot.start, channel);
+    const prev = l?.slots.filter(s => s.start < slot.start).at(-1);
+    if (prev && cur.current.channel === channel) play(channel, prev, true);
+  }
+
   function flip(step: number) {
     if (!lineups?.length) return;
     const i = lineups.findIndex(l => l.id === cur.current.channel);
@@ -174,7 +186,10 @@ export default function Player({ slug }: { slug: string }) {
   function applyCaptions(on: boolean) {
     try {
       if (on) yt.current?.loadModule('captions');
-      else yt.current?.unloadModule('captions');
+      else {
+        yt.current?.setOption('captions', 'track', {});
+        yt.current?.unloadModule('captions');
+      }
     } catch { /* player not ready yet */ }
   }
 
@@ -243,6 +258,10 @@ export default function Player({ slug }: { slug: string }) {
             applyCaptions(captionsOn.current);
           }
         },
+        // Fires when YouTube loads its captions module by itself; unload it again if the viewer turned captions off
+        onApiChange: () => {
+          if (!captionsOn.current && yt.current.getOptions?.().includes('captions')) applyCaptions(false);
+        },
         onError: (e: { data: number }) => {
           const s = cur.current.slot;
           if (s && UNPLAYABLE.includes(e.data)) api(`videos/${s.videoId}/broken`, 'POST').catch(() => {});
@@ -267,6 +286,8 @@ export default function Player({ slug }: { slug: string }) {
         case 'ArrowDown': flip(-1); break;
         case 'ArrowLeft': seekBy(-5); break;
         case 'ArrowRight': seekBy(5); break;
+        case 'N': next(); break;
+        case 'P': previous(); break;
         case ' ': case 'k': togglePause(); break;
         case 'm': toggleMute(); break;
         case 'g': setGuide(true); break;
@@ -320,7 +341,7 @@ export default function Player({ slug }: { slug: string }) {
           {lineups === null ? 'Loading…' : target ? (
             <>
               <span>Click or press any key to tune in to {target.name}</span>
-              <small>Click pause · double-click full screen · ↑ ↓ Channel · ← → skip 5s · K pause · M mute · C captions · G Guide · R Restart · L Go live · Esc Channels</small>
+              <small>Click pause · double-click full screen · ↑ ↓ Channel · ← → skip 5s · Shift+N/P next/previous video · K pause · M mute · C captions · G Guide · R Restart · L Go live · Esc Channels</small>
               <small>Hold right-click and scroll to change volume</small>
             </>
           ) : (
@@ -364,7 +385,9 @@ export default function Player({ slug }: { slug: string }) {
               </div>
             )}
             <div className="controls">
+              <Ctl icon="previous" label="Previous video (Shift+P)" onClick={previous} disabled={!slot} />
               <Ctl icon={paused ? 'play' : 'pause'} label={paused ? 'Play (k)' : 'Pause (k)'} onClick={togglePause} />
+              <Ctl icon="next" label="Skip to next video (Shift+N)" onClick={next} disabled={!slot} />
               <Ctl icon="replay" label="Restart (r)" onClick={restart} />
               <Ctl icon="down" label="Channel down (↓)" onClick={() => flip(-1)} />
               <Ctl icon="up" label="Channel up (↑)" onClick={() => flip(1)} />
