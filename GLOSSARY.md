@@ -90,7 +90,7 @@ Dropping a Screen's Time-shift back to zero.
 _Avoid_: Catch up, sync
 
 **Timed comment**:
-A top YouTube comment that points at a moment in its video (like 2:34); it pops up on the Screen for a few seconds as that moment plays. Comments with more than three timestamps are chapter lists and never pop up.
+A top YouTube comment that points at a moment in its video (like 2:34). All of them are listed under the Comments panel's Timed tab, and unless a Screen turns popups off, each pops up for a few seconds as its moment plays (three at most at once). Clicking one jumps to just before its moment. Comments with more than three timestamps are chapter lists and are left out.
 _Avoid_: Live chat, bullet comment
 
 **Guide**:

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { api, go, now, schedule, setIcon, type Lineup, type Slot } from './api.ts';
-import Comments, { Item, type Comment } from './Comments.tsx';
+import Comments, { Item, type Timed } from './Comments.tsx';
 import Guide from './Guide.tsx';
 import Icon, { type IconName } from './Icon.tsx';
 
@@ -25,6 +25,8 @@ const UNPLAYABLE = [100, 101, 150]; // removed, private, or embedding disabled
 const POPOUT = 'youtube-tv-popout'; // one shared window name, so popping out again reuses the same small window
 const LIVE_WITHIN = 15_000;
 const TIMED_FOR = 8; // seconds a Timed comment stays up
+const TIMED_MAX = 3; // on screen at once
+const LEAD_IN = 5; // seconds a jump to a Timed comment lands before its moment
 
 function clock(ms: number) {
   const s = Math.round(Math.abs(ms) / 1000);
@@ -72,7 +74,8 @@ export default function Player({ slug }: { slug: string }) {
   const [guide, setGuide] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [uploader, setUploader] = useState<{ videoId: string; channelId: string }>();
-  const [timed, setTimed] = useState<{ videoId: string; list: { second: number; comment: Comment }[] }>();
+  const [timed, setTimed] = useState<{ videoId: string; list: Timed[] }>();
+  const [overlay, setOverlay] = useState(() => load('timedComments', 1) === 1);
   const [pos, setPos] = useState(0); // seconds into the current video
   const [ui, setUi] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -137,7 +140,7 @@ export default function Player({ slug }: { slug: string }) {
       setIcon(r?.avatar ?? undefined);
       if (r) setUploader({ videoId: slot.videoId, channelId: r.channelId });
     });
-    api<{ second: number; comment: Comment }[]>(`videos/${slot.videoId}/timed-comments`).catch(() => []).then(list => {
+    api<Timed[]>(`videos/${slot.videoId}/timed-comments`).catch(() => []).then(list => {
       if (cur.current.slot === slot) setTimed({ videoId: slot.videoId, list });
     });
   }
@@ -247,6 +250,13 @@ export default function Player({ slug }: { slug: string }) {
     applyCaptions(on);
     showUi(1500);
   }
+
+  function changeOverlay(on: boolean) {
+    setOverlay(on);
+    store('timedComments', on ? 1 : 0);
+  }
+
+  const jumpTo = (second: number) => yt.current?.seekTo(Math.max(0, second - LEAD_IN), true);
 
   function changeVolume(v: number) {
     const level = Math.max(0, Math.min(100, Math.round(v)));
@@ -405,7 +415,8 @@ export default function Player({ slug }: { slug: string }) {
   const duration = slot ? (slot.end - slot.start) / 1000 : 0;
   const shift = slot ? slot.start + pos * 1000 - now() : 0;
   const isLive = Math.abs(shift) < LIVE_WITHIN;
-  const popping = slot && timed?.videoId === slot.videoId ? timed.list.filter(m => m.second <= pos && pos < m.second + TIMED_FOR).slice(-3) : [];
+  const timedList = slot && timed?.videoId === slot.videoId ? timed.list : undefined;
+  const popping = overlay && timedList ? timedList.filter(m => m.second <= pos && pos < m.second + TIMED_FOR).slice(-TIMED_MAX) : [];
   const pct = (seconds: number) => `${duration ? (Math.max(0, Math.min(duration, seconds)) / duration) * 100 : 0}%`;
   return (
     <div className={`tv ${background ? 'background' : ''}`} onMouseMove={() => showUi(1500)}>
@@ -505,9 +516,21 @@ export default function Player({ slug }: { slug: string }) {
           </div>
         </div>
       )}
-      {popping.length > 0 && <ul className="timed">{popping.map(m => <Item key={`${m.comment.id}@${m.second}`} c={m.comment} />)}</ul>}
+      {popping.length > 0 && (
+        <ul className="timed">
+          {popping.map(m => (
+            <Item key={`${m.comment.id}@${m.second}`} c={m.comment} className="comment jump" title="Jump to this moment" onClick={() => jumpTo(m.second)}>
+              <button className="hide-timed" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); changeOverlay(false); }}
+                title="Keep Timed comments in the Comments panel only">Hide popups</button>
+            </Item>
+          ))}
+        </ul>
+      )}
       {/* keyed by video, so each new video starts the panel over at its own first page */}
-      {showComments && slot && <Comments key={slot.videoId} videoId={slot.videoId} onClose={() => setShowComments(false)} />}
+      {showComments && slot && (
+        <Comments key={slot.videoId} videoId={slot.videoId} timed={timedList} overlay={overlay} onOverlay={changeOverlay}
+          onJump={jumpTo} onClose={() => setShowComments(false)} />
+      )}
       {volumeOsd && (
         <div key={volumeOsd.key} className="volume-osd" onAnimationEnd={() => setVolumeOsd(null)}>{volumeOsd.level}</div>
       )}

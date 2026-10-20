@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type LiHTMLAttributes, type ReactNode } from 'react';
 import { api } from './api.ts';
 import Icon from './Icon.tsx';
 
@@ -38,9 +38,9 @@ function usePages(path: string) {
   return { ...state, more, started: token.current !== undefined, done: token.current === null };
 }
 
-export function Item({ c, children }: { c: Comment; children?: ReactNode }) {
+export function Item({ c, children, ...li }: { c: Comment; children?: ReactNode } & LiHTMLAttributes<HTMLLIElement>) {
   return (
-    <li className="comment">
+    <li className="comment" {...li}>
       <img src={c.avatar} alt="" referrerPolicy="no-referrer" />
       <div>
         <div><b>{c.author}</b> <small>{ago(c.at)}</small></div>
@@ -78,25 +78,48 @@ function Thread({ c }: { c: Comment }) {
   );
 }
 
-const ORDERS = [['relevance', 'Top'], ['time', 'Newest']] as const;
+export type Timed = { second: number; comment: Comment };
 
-export default function Comments({ videoId, onClose }: { videoId: string; onClose: () => void }) {
-  const [order, setOrder] = useState<(typeof ORDERS)[number][0]>('relevance');
-  return (
-    // Keyed by sort, so switching starts the list over at the top
-    <Feed key={order} path={`videos/${videoId}/comments?order=${order}`}>
-      {/* No focus left on the buttons, or Space would press them again instead of pausing */}
-      <header>
-        <b>Comments</b>
-        <span className="sort">
-          {ORDERS.map(([o, label]) => (
-            <button key={o} className={order === o ? 'on' : ''} aria-pressed={order === o} onClick={() => setOrder(o)} onMouseDown={e => e.preventDefault()}>{label}</button>
-          ))}
-        </span>
-        <button onClick={onClose} onMouseDown={e => e.preventDefault()} title="Close comments" aria-label="Close comments"><Icon name="close" /></button>
-      </header>
-    </Feed>
+const TABS = [['relevance', 'Top'], ['time', 'Newest'], ['timed', 'Timed']] as const;
+
+type Props = {
+  videoId: string;
+  timed?: Timed[]; // undefined while loading
+  overlay: boolean; // Timed comments pop up over the video
+  onOverlay: (on: boolean) => void;
+  onJump: (second: number) => void;
+  onClose: () => void;
+};
+
+export default function Comments({ videoId, timed, overlay, onOverlay, onJump, onClose }: Props) {
+  const [tab, setTab] = useState<(typeof TABS)[number][0]>('relevance');
+  const header = (
+    // No focus left on the buttons, or Space would press them again instead of pausing
+    <header>
+      <b>Comments</b>
+      <span className="sort">
+        {TABS.map(([t, label]) => (
+          <button key={t} className={tab === t ? 'on' : ''} aria-pressed={tab === t} onClick={() => setTab(t)} onMouseDown={e => e.preventDefault()}>{label}</button>
+        ))}
+      </span>
+      <button onClick={onClose} onMouseDown={e => e.preventDefault()} title="Close comments" aria-label="Close comments"><Icon name="close" /></button>
+    </header>
   );
+  if (tab === 'timed') return (
+    <aside className="comments">
+      {header}
+      <label className="overlay-toggle">
+        {/* Blurred after each change, or Space would tick it again instead of pausing */}
+        <input type="checkbox" checked={overlay} onChange={e => { onOverlay(e.target.checked); e.currentTarget.blur(); }} />
+        Pop up over the video
+      </label>
+      {!timed && <p className="dim">Loading…</p>}
+      {timed && !timed.length && <p>No top comments point at a moment in this video.</p>}
+      <ul>{timed?.map(m => <Item key={`${m.comment.id}@${m.second}`} c={m.comment} className="comment jump" title="Jump to this moment" onClick={() => onJump(m.second)} />)}</ul>
+    </aside>
+  );
+  // Keyed by sort, so switching starts the list over at the top
+  return <Feed key={tab} path={`videos/${videoId}/comments?order=${tab}`}>{header}</Feed>;
 }
 
 function Feed({ path, children }: { path: string; children: ReactNode }) {

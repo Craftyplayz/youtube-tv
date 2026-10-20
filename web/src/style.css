@@ -109,14 +109,25 @@ button:disabled { opacity: .4; cursor: default; }
   background: none; color: #3ea6ff; font-size: .85rem; font-weight: 600;
 }
 .replies-toggle:hover { background: rgb(62 166 255 / .2); }
-/* Timed comments rise above the controls while their moment plays; clicks pass through to the video */
+.overlay-toggle { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: .9rem; cursor: pointer; }
+.overlay-toggle input { accent-color: var(--accent); }
+.comment.jump { cursor: pointer; }
+.comments .comment.jump:hover { margin: -6px; padding: 6px; border-radius: 8px; background: rgb(255 255 255 / .06); }
+/* Timed comments rise above the controls while their moment plays */
 .timed {
   position: absolute; left: 24px; bottom: 88px; display: grid; gap: 8px; width: min(380px, calc(100% - 48px));
-  margin: 0; padding: 0; list-style: none; pointer-events: none;
+  margin: 0; padding: 0; list-style: none;
 }
-.timed .comment { padding: 10px 12px; border-radius: 12px; background: rgb(15 15 15 / .85); animation: rise .3s ease-out; }
+.timed .comment { position: relative; padding: 10px 12px; border-radius: 12px; background: rgb(15 15 15 / .85); animation: rise .3s ease-out; }
+.timed .comment:hover { background: rgb(40 40 40 / .92); }
 .timed .comment p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .timed small { color: var(--dim); }
+.hide-timed {
+  position: absolute; top: 6px; right: 6px; padding: 2px 8px; border: 0; border-radius: 10px;
+  background: rgb(255 255 255 / .15); font-size: .75rem; opacity: 0; transition: opacity .15s;
+}
+.timed .comment:hover .hide-timed { opacity: 1; }
+.hide-timed:hover { background: rgb(255 255 255 / .3); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 @keyframes osd { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes flash { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
