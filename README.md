@@ -16,7 +16,9 @@ There is no login: anyone who can reach the port can edit Channels. Keep it on y
 
 The home page lists every Channel with a search bar; each Channel has its own page, e.g. a Channel named "Tech" is at `/tech-tv`.
 
-↑ ↓ change Channel · G Guide · R Restart · L Go live · C captions · Space pause · F fullscreen · Esc back to Channels · hold right-click and scroll for volume. Move the mouse to show on-screen buttons, including **Exclude** (never show this video on this Channel again).
+The player copies YouTube's: click to pause, double-click for full screen, drag the red bar to seek, click **● LIVE** to catch up. Move the mouse to show the controls, including **Exclude** (never show this video on this Channel again).
+
+↑ ↓ change Channel · ← → skip 5s · Space/K pause · M mute · C captions · F full screen · G Guide · R Restart · L Go live · Esc back to Channels · hold right-click and scroll for volume
 
 ## Develop
 

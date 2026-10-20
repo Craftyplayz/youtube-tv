@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
 import { api, go, now, schedule, type Lineup, type Slot } from './api.ts';
 import Guide from './Guide.tsx';
+import Icon, { type IconName } from './Icon.tsx';
 
 declare global {
   interface Window { YT: any; onYouTubeIframeAPIReady: () => void }
@@ -20,7 +21,10 @@ const LIVE_WITHIN = 15_000;
 
 function clock(ms: number) {
   const s = Math.round(Math.abs(ms) / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s / 60) % 60;
+  const sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
 // Per-Screen preferences; everything still works if the browser blocks storage
@@ -41,53 +45,64 @@ function store(key: string, value: number) {
 const toggleFullscreen = () =>
   (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
 
+function Ctl({ label, icon, ...rest }: { label: string; icon: IconName } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <button title={label} aria-label={label} {...rest}><Icon name={icon} /></button>;
+}
+
 export default function Player({ slug }: { slug: string }) {
   const box = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const yt = useRef<any>(null);
   const startedRef = useRef(false);
   const cur = useRef<{ channel: number; slot: Slot | null }>({ channel: 0, slot: null });
   const hideTimer = useRef(0);
-  const overHud = useRef(false);
+  const overControls = useRef(false);
   const rightDown = useRef(false);
   const captionsFor = useRef('');
   const vol = useRef(load('volume', 100));
   const [lineups, setLineups] = useState<Lineup[] | null>(null);
   const [started, setStarted] = useState(false);
   const [guide, setGuide] = useState(false);
-  const [shift, setShift] = useState(0);
+  const [pos, setPos] = useState(0); // seconds into the current video
   const [ui, setUi] = useState(true);
+  const [paused, setPaused] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [flash, setFlash] = useState<{ icon: IconName; key: number } | null>(null);
   const [volume, setVolume] = useState(vol.current);
+  const [muted, setMuted] = useState(false);
   const [captions, setCaptions] = useState(() => load('captions', 0) === 1);
   const captionsOn = useRef(captions);
   captionsOn.current = captions;
   const target = lineups?.find(l => l.slug === slug);
 
-  useEffect(() => { if (target && interacted) start(); }, [lineups]);
-
   useEffect(() => {
     schedule(now(), now() + 1).then(setLineups);
-    // Time-shift is derived, never stored: where this Screen is in the Schedule minus where Live is
     const t = setInterval(() => {
-      const s = cur.current.slot;
       const time = yt.current?.getCurrentTime?.();
-      if (s && time !== undefined) setShift(s.start + time * 1000 - now());
-    }, 1000);
+      if (time !== undefined) setPos(time);
+    }, 500);
+    const onFullscreen = () => setFullscreen(!!document.fullscreenElement);
+    addEventListener('fullscreenchange', onFullscreen);
     return () => {
       clearInterval(t);
       clearTimeout(hideTimer.current);
+      removeEventListener('fullscreenchange', onFullscreen);
     };
   }, []);
+
+  useEffect(() => { if (target && interacted) start(); }, [lineups]);
 
   function showUi(ms: number) {
     setUi(true);
     clearTimeout(hideTimer.current);
     // Stays up while the mouse rests on the controls
-    hideTimer.current = window.setTimeout(() => (overHud.current ? showUi(ms) : setUi(false)), ms);
+    hideTimer.current = window.setTimeout(() => (overControls.current ? showUi(ms) : setUi(false)), ms);
   }
 
   function play(channel: number, slot: Slot | null, fromStart: boolean) {
     cur.current = { channel, slot };
     captionsFor.current = '';
+    setPos(0);
     showUi(4000);
     if (!slot) {
       yt.current.stopVideo();
@@ -130,6 +145,31 @@ export default function Player({ slug }: { slug: string }) {
     tuneIn(lineups[(i + step + lineups.length) % lineups.length].id);
   }
 
+  function togglePause() {
+    const p = yt.current;
+    if (!p?.getPlayerState) return;
+    const playing = p.getPlayerState() === window.YT.PlayerState.PLAYING;
+    if (playing) p.pauseVideo();
+    else p.playVideo();
+    setFlash({ icon: playing ? 'pause' : 'play', key: Date.now() });
+  }
+
+  function seekBy(seconds: number) {
+    const p = yt.current;
+    if (p?.getCurrentTime) p.seekTo(Math.max(0, p.getCurrentTime() + seconds), true);
+  }
+
+  // Seeking anywhere in the video just changes this Screen's Time-shift
+  function seekToPointer(clientX: number, final: boolean) {
+    const slot = cur.current.slot;
+    const el = bar.current;
+    if (!slot || !el) return;
+    const r = el.getBoundingClientRect();
+    const t = (Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * (slot.end - slot.start)) / 1000;
+    yt.current?.seekTo(t, final);
+    setPos(t);
+  }
+
   // shortcut: loadModule/unloadModule('captions') is undocumented YouTube player API; if YouTube drops it, captions follow YouTube's own default
   function applyCaptions(on: boolean) {
     try {
@@ -152,7 +192,22 @@ export default function Player({ slug }: { slug: string }) {
     setVolume(level);
     store('volume', level);
     yt.current?.setVolume(level);
-    if (level > 0) yt.current?.unMute();
+    if (level > 0) {
+      yt.current?.unMute();
+      setMuted(false);
+    }
+    showUi(1500);
+  }
+
+  function toggleMute() {
+    if (muted || vol.current === 0) {
+      yt.current?.unMute();
+      setMuted(false);
+      if (vol.current === 0) changeVolume(50);
+    } else {
+      yt.current?.mute();
+      setMuted(true);
+    }
     showUi(1500);
   }
 
@@ -178,8 +233,9 @@ export default function Player({ slug }: { slug: string }) {
           tuneIn(target.id);
         },
         onStateChange: (e: { data: number }) => {
-          const { ENDED, PLAYING } = window.YT.PlayerState;
+          const { ENDED, PLAYING, PAUSED } = window.YT.PlayerState;
           if (e.data === ENDED) next();
+          if (e.data === PLAYING || e.data === PAUSED) setPaused(e.data === PAUSED);
           // Captions reset with every new video, so re-apply the choice once each one starts
           const id = cur.current.slot?.videoId ?? '';
           if (e.data === PLAYING && captionsFor.current !== id) {
@@ -206,15 +262,17 @@ export default function Player({ slug }: { slug: string }) {
         if (e.key === 'Escape' || e.key === 'g') setGuide(false);
         return;
       }
-      const p = yt.current;
       switch (e.key) {
         case 'ArrowUp': flip(1); break;
         case 'ArrowDown': flip(-1); break;
+        case 'ArrowLeft': seekBy(-5); break;
+        case 'ArrowRight': seekBy(5); break;
+        case ' ': case 'k': togglePause(); break;
+        case 'm': toggleMute(); break;
         case 'g': setGuide(true); break;
         case 'r': restart(); break;
         case 'l': goLive(); break;
         case 'c': toggleCaptions(); break;
-        case ' ': if (p?.getPlayerState() === 1) p.pauseVideo(); else p?.playVideo(); break;
         case 'f': toggleFullscreen(); break;
         case 'Escape': go('/'); break;
         default: return;
@@ -250,7 +308,10 @@ export default function Player({ slug }: { slug: string }) {
 
   const slot = cur.current.slot;
   const index = lineups?.findIndex(l => l.id === cur.current.channel) ?? -1;
+  const duration = slot ? (slot.end - slot.start) / 1000 : 0;
+  const shift = slot ? slot.start + pos * 1000 - now() : 0;
   const isLive = Math.abs(shift) < LIVE_WITHIN;
+  const pct = (seconds: number) => `${duration ? (Math.max(0, Math.min(duration, seconds)) / duration) * 100 : 0}%`;
   return (
     <div className="tv" onMouseMove={() => showUi(1500)}>
       <div className="screen" ref={box} />
@@ -259,7 +320,7 @@ export default function Player({ slug }: { slug: string }) {
           {lineups === null ? 'Loading…' : target ? (
             <>
               <span>Click or press any key to tune in to {target.name}</span>
-              <small>↑ ↓ change Channel · G Guide · R Restart · L Go live · C captions · Space pause · F fullscreen · Esc Channels</small>
+              <small>Click pause · double-click full screen · ↑ ↓ Channel · ← → skip 5s · K pause · M mute · C captions · G Guide · R Restart · L Go live · Esc Channels</small>
               <small>Hold right-click and scroll to change volume</small>
             </>
           ) : (
@@ -267,37 +328,68 @@ export default function Player({ slug }: { slug: string }) {
           )}
         </div>
       )}
+      {started && <div className="click-layer" onClick={togglePause} onDoubleClick={toggleFullscreen} />}
+      {flash && (
+        <div key={flash.key} className="flash" onAnimationEnd={() => setFlash(null)}>
+          <Icon name={flash.icon} />
+        </div>
+      )}
       {started && (
-        <div
-          className={`hud ${ui || !slot ? '' : 'hidden'}`}
-          onMouseEnter={() => { overHud.current = true; }}
-          onMouseLeave={() => { overHud.current = false; }}
-        >
-          <div className="now-playing">
+        <div className={`hud ${ui || paused || !slot ? '' : 'hidden'}`}>
+          <div className="hud-top">
             <span className="ch">{index + 1} {lineups?.[index]?.name}</span>
-            <span>{slot ? `${slot.title} · ${slot.by}` : 'Off air'}</span>
-            {slot && <span className={`shift ${isLive ? 'live' : ''}`}>{isLive ? 'LIVE' : `${shift < 0 ? '−' : '+'}${clock(shift)}`}</span>}
+            <span className="title">{slot ? slot.title : 'Off air'}</span>
+            {slot && <span className="by">{slot.by}</span>}
           </div>
           {/* Clicks must not leave focus on a button, or Space and arrow keys would press it again */}
-          <nav onMouseDown={e => { if ((e.target as HTMLElement).tagName !== 'INPUT') e.preventDefault(); }}>
-            <button onClick={() => flip(-1)}>▼ Ch</button>
-            <button onClick={() => flip(1)}>▲ Ch</button>
-            <button onClick={restart}>Restart</button>
-            <button onClick={goLive} disabled={isLive}>Go live</button>
-            <button onClick={() => setGuide(true)}>Guide</button>
-            <button onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} title="Captions (C)">CC</button>
-            <label className="volume" title="Volume (or hold right-click and scroll)">
-              <span aria-hidden>{volume ? '🔊' : '🔇'}</span>
-              <input
-                type="range" min={0} max={100} value={volume} aria-label="Volume"
-                onChange={e => changeVolume(Number(e.target.value))}
-                onPointerUp={e => e.currentTarget.blur()}
-              />
-            </label>
-            <button onClick={toggleFullscreen} title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
-            <button onClick={exclude} disabled={!slot} title="Never show this video on this Channel again">Exclude</button>
-            <a href="/">Channels</a>
-          </nav>
+          <div
+            className="hud-bottom"
+            onMouseEnter={() => { overControls.current = true; }}
+            onMouseLeave={() => { overControls.current = false; }}
+            onMouseDown={e => { if ((e.target as HTMLElement).tagName !== 'INPUT') e.preventDefault(); }}
+          >
+            {slot && (
+              <div
+                className="progress" ref={bar}
+                onPointerDown={e => {
+                  if (e.button !== 0) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  seekToPointer(e.clientX, false);
+                }}
+                onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) seekToPointer(e.clientX, false); }}
+                onPointerUp={e => { if (e.button === 0) seekToPointer(e.clientX, true); }}
+              >
+                <div className="progress-live" style={{ width: pct((now() - slot.start) / 1000) }} />
+                <div className="progress-played" style={{ width: pct(pos) }} />
+              </div>
+            )}
+            <div className="controls">
+              <Ctl icon={paused ? 'play' : 'pause'} label={paused ? 'Play (k)' : 'Pause (k)'} onClick={togglePause} />
+              <Ctl icon="replay" label="Restart (r)" onClick={restart} />
+              <Ctl icon="down" label="Channel down (↓)" onClick={() => flip(-1)} />
+              <Ctl icon="up" label="Channel up (↑)" onClick={() => flip(1)} />
+              <div className="volume">
+                <Ctl icon={muted || !volume ? 'muted' : 'volume'} label={muted ? 'Unmute (m)' : 'Mute (m)'} onClick={toggleMute} />
+                <input
+                  type="range" min={0} max={100} value={muted ? 0 : volume} aria-label="Volume"
+                  onChange={e => changeVolume(Number(e.target.value))}
+                  onPointerUp={e => e.currentTarget.blur()}
+                />
+              </div>
+              {slot && <span className="time">{clock(pos * 1000)} / {clock(duration * 1000)}</span>}
+              {slot && (
+                <button className={`live ${isLive ? 'at-live' : ''}`} onClick={goLive} title={isLive ? 'Watching Live' : 'Go live (l)'}>
+                  <i />{isLive ? 'LIVE' : `${shift < 0 ? '−' : '+'}${clock(shift)}`}
+                </button>
+              )}
+              <span className="spacer" />
+              <Ctl icon="block" label="Exclude: never show this video on this Channel again" onClick={exclude} disabled={!slot} />
+              <Ctl icon="guide" label="Guide (g)" onClick={() => setGuide(true)} />
+              <Ctl icon="cc" label="Captions (c)" onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} />
+              <Ctl icon="home" label="Channels (Esc)" onClick={() => go('/')} />
+              <Ctl icon={fullscreen ? 'fullscreenExit' : 'fullscreen'} label={fullscreen ? 'Exit full screen (f)' : 'Full screen (f)'} onClick={toggleFullscreen} />
+            </div>
+          </div>
         </div>
       )}
       {guide && (

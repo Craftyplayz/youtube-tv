@@ -26,21 +26,50 @@ button:disabled { opacity: .4; cursor: default; }
 .screen, .screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
 .splash { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; font-size: 1.5rem; cursor: pointer; }
 .splash small { color: var(--dim); font-size: 1rem; }
+.click-layer { position: absolute; inset: 0; }
+
+/* Controls modelled on YouTube's player; the gradient lets clicks through to the video */
 .hud {
-  position: absolute; inset: auto 0 0 0; padding: 24px 32px; gap: 16px;
-  display: flex; justify-content: space-between; align-items: end;
-  background: linear-gradient(transparent, rgb(0 0 0 / .85)); transition: opacity .25s;
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between;
+  pointer-events: none; transition: opacity .25s;
+  background: linear-gradient(rgb(0 0 0 / .6), transparent 18%, transparent 78%, rgb(0 0 0 / .75));
 }
-.hud.hidden { opacity: 0; pointer-events: none; }
-.hud nav button.on { background: var(--text); color: var(--bg); }
-.volume { display: flex; align-items: center; gap: 6px; }
-.volume input { width: 110px; padding: 0; border: 0; background: none; accent-color: var(--accent); }
-.now-playing { display: grid; gap: 4px; }
-.now-playing .ch { font-size: 1.6rem; font-weight: 700; }
-.shift { justify-self: start; padding: 2px 8px; border-radius: 4px; background: var(--panel); font-variant-numeric: tabular-nums; }
-.shift.live { background: var(--accent); }
-.hud nav { display: flex; gap: 8px; align-items: center; }
-.hud nav a { padding: 6px 10px; }
+.hud.hidden { opacity: 0; }
+.hud.hidden * { pointer-events: none !important; }
+.hud-top { display: grid; gap: 2px; padding: 18px 24px; text-shadow: 0 1px 3px #000; }
+.hud-top .ch { font-size: 1.4rem; font-weight: 700; }
+.hud-top .title { font-size: 1.15rem; }
+.hud-top .by { color: #ccc; }
+.hud-bottom { padding: 0 12px 4px; pointer-events: auto; }
+.progress { position: relative; height: 4px; margin: 10px 0 6px; background: rgb(255 255 255 / .2); cursor: pointer; touch-action: none; transition: height .1s; }
+.progress::before { content: ''; position: absolute; inset: -8px 0; }
+.progress:hover { height: 6px; }
+.progress-live, .progress-played { position: absolute; inset: 0 auto 0 0; pointer-events: none; }
+.progress-live { background: rgb(255 255 255 / .4); }
+.progress-played { background: var(--accent); }
+.progress-played::after {
+  content: ''; position: absolute; top: 50%; right: -6px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent); transform: translateY(-50%) scale(0); transition: transform .1s;
+}
+.progress:hover .progress-played::after { transform: translateY(-50%) scale(1); }
+.controls { display: flex; align-items: center; gap: 2px; height: 48px; }
+.controls button { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: none; border: 0; border-radius: 50%; opacity: .9; }
+.controls button:hover:not(:disabled) { opacity: 1; background: rgb(255 255 255 / .1); }
+.controls button.on::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: 7px; height: 3px; border-radius: 2px; background: var(--accent); }
+.controls .live { display: flex; gap: 6px; width: auto; padding: 0 10px; border-radius: 16px; font-size: .85rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+.live.at-live i { background: #f00; }
+.spacer { flex: 1; }
+.volume { display: flex; align-items: center; }
+.volume input { width: 0; padding: 0; border: 0; background: none; opacity: 0; accent-color: #fff; transition: width .2s, opacity .2s; }
+.volume:hover input, .volume:focus-within input { width: 72px; margin-right: 8px; opacity: 1; }
+.time { margin: 0 8px; font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.flash {
+  position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 72px; height: 72px; margin: -36px 0 0 -36px;
+  border-radius: 50%; background: rgb(0 0 0 / .5); pointer-events: none; animation: flash .5s ease-out forwards;
+}
+.flash svg { width: 40px; height: 40px; }
+@keyframes flash { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
 
 /* Guide */
 .guide { position: fixed; inset: 0; display: grid; align-content: center; padding: 32px 0; background: rgb(0 0 0 / .8); }
