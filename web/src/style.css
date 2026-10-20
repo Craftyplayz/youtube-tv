@@ -110,6 +110,7 @@ button:disabled { opacity: .4; cursor: default; }
 /* Phone controls in the Android app, modelled on YouTube's app: the video dims while they show */
 .phone .hud { background: rgb(0 0 0 / .45); }
 .phone .hud button { pointer-events: auto; }
+.phone .click-layer { touch-action: none; } /* swipes change Channel instead of scrolling */
 .phone .hud-top { display: flex; align-items: start; gap: 8px; padding: 6px 6px 0 16px; }
 .phone .hud-top .info { flex: 1; display: grid; gap: 2px; min-width: 0; padding-top: 10px; }
 .phone .hud-top .title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -117,7 +118,8 @@ button:disabled { opacity: .4; cursor: default; }
 .middle button { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: rgb(0 0 0 / .35); }
 .middle button.big { width: 64px; height: 64px; }
 .middle button.big svg { width: 40px; height: 40px; }
-.phone .hud-bottom { padding: 0 8px 4px 16px; }
+.phone .hud-bottom { padding: 0 8px 4px 16px; pointer-events: none; } /* only its buttons and seek bar take taps, so swipes can start between them */
+.phone .progress { pointer-events: auto; }
 .phone .time { margin: 0 4px 0 0; }
 .phone .progress { margin: 0 0 6px; }
 .phone .progress::before { inset: -14px 0; }

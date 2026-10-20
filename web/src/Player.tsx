@@ -26,6 +26,7 @@ const UNPLAYABLE = [100, 101, 150]; // removed, private, or embedding disabled
 const POPOUT = 'youtube-tv-popout'; // one shared window name, so popping out again reuses the same small window
 const LIVE_WITHIN = 15_000;
 const DOUBLE_TAP = 300;
+const SWIPE = 50; // px a finger travels up or down the video to change Channel
 const landscapeQuery = matchMedia('(orientation: landscape)');
 
 function clock(ms: number) {
@@ -69,6 +70,7 @@ export default function Player({ slug }: { slug: string }) {
   const rightDown = useRef(false);
   const clickTimer = useRef(0);
   const lastTap = useRef(0);
+  const swipe = useRef<{ x: number; y: number; done?: boolean } | null>(null);
   const vol = useRef(load('volume', 100));
   const [lineups, setLineups] = useState<Lineup[] | null>(null);
   const [started, setStarted] = useState(false);
@@ -513,11 +515,23 @@ export default function Player({ slug }: { slug: string }) {
                 swallowClick.current = false;
                 return;
               }
-              if (app) return tap(e);
+              if (app) return swipe.current?.done || tap(e);
               // A single click waits briefly so a double-click only toggles full screen, without pausing and resuming
               if (e.detail === 1) clickTimer.current = window.setTimeout(togglePause, 300);
             }}
             onDoubleClick={app ? undefined : toggleFull}
+            // Swiping up or down the video changes Channel, like flicking through a TV app
+            onPointerDown={app && (e => { swipe.current = { x: e.clientX, y: e.clientY }; })}
+            onPointerUp={app && (e => {
+              const s = swipe.current;
+              if (!s) return;
+              const dx = e.clientX - s.x;
+              const dy = e.clientY - s.y;
+              if (Math.abs(dy) < SWIPE || Math.abs(dy) < 2 * Math.abs(dx)) return;
+              s.done = true;
+              clearTimeout(clickTimer.current);
+              flip(dy < 0 ? 1 : -1);
+            })}
           />
         )}
         {flash && (
