@@ -67,6 +67,7 @@ export default function Player({ slug }: { slug: string }) {
   const [ui, setUi] = useState(true);
   const [paused, setPaused] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [background, setBackground] = useState(document.hidden);
   const [flash, setFlash] = useState<{ icon: IconName; key: number } | null>(null);
   const [volume, setVolume] = useState(vol.current);
   const [muted, setMuted] = useState(false);
@@ -86,11 +87,14 @@ export default function Player({ slug }: { slug: string }) {
       // YouTube's player brings its own captions back after resizing into or out of full screen; restore the viewer's choice once it settles
       for (const ms of [300, 1000]) setTimeout(() => applyCaptions(captionsOn.current), ms);
     };
+    const onVisibility = () => setBackground(document.hidden);
     addEventListener('fullscreenchange', onFullscreen);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       clearInterval(t);
       clearTimeout(hideTimer.current);
       removeEventListener('fullscreenchange', onFullscreen);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
@@ -334,7 +338,7 @@ export default function Player({ slug }: { slug: string }) {
   const isLive = Math.abs(shift) < LIVE_WITHIN;
   const pct = (seconds: number) => `${duration ? (Math.max(0, Math.min(duration, seconds)) / duration) * 100 : 0}%`;
   return (
-    <div className="tv" onMouseMove={() => showUi(1500)}>
+    <div className={`tv ${background ? 'background' : ''}`} onMouseMove={() => showUi(1500)}>
       <div className="screen" ref={box} />
       {!started && (
         <div className="splash" onClick={start}>

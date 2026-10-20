@@ -27,6 +27,8 @@ button:disabled { opacity: .4; cursor: default; }
 .splash { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; font-size: 1.5rem; cursor: pointer; }
 .splash small { color: var(--dim); font-size: 1rem; }
 .click-layer { position: absolute; inset: 0; }
+/* Background tab: YouTube picks quality from the player's size, so a 200px player (its minimum) streams the lowest quality; sound keeps playing */
+.tv.background .screen iframe { width: 200px; height: 200px; }
 
 /* Controls modelled on YouTube's player; the gradient lets clicks through to the video */
 .hud {
