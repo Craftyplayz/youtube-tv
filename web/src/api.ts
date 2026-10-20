@@ -10,6 +10,7 @@ export type Channel = {
   recent_ratio: number;
   recent_days: number;
   skip_shorts: number;
+  skip_live: number;
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;
@@ -17,6 +18,11 @@ export type Channel = {
 };
 
 export const thumb = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+
+// The tab's icon: the YouTube logo, or on a Channel page the avatar of whoever uploaded the video playing
+export function setIcon(href = '/favicon.svg') {
+  document.querySelector<HTMLLinkElement>('link[rel=icon]')!.href = href;
+}
 
 // Switches page without reloading, so the click still counts as the gesture browsers require before playing sound
 export function go(path: string) {

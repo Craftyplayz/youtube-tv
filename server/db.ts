@@ -62,5 +62,13 @@ export function openDb(file: string): Db {
       PRIMARY KEY (channel_id, video_id)
     );
   `);
+  // Columns added later: CREATE TABLE IF NOT EXISTS leaves existing tables as they were
+  for (const [table, column] of [
+    ['channels', 'skip_live INTEGER NOT NULL DEFAULT 0'],
+    ['videos', 'is_live INTEGER NOT NULL DEFAULT 0'],   // a livestream (past, live or upcoming) in its YouTube channel's live tab
+  ]) {
+    const names = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
+    if (!names.includes(column.split(' ')[0])) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
+  }
   return db;
 }

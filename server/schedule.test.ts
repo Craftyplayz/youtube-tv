@@ -37,7 +37,10 @@ test('Shuffle airs every video once before any repeats', () => {
 test('Shuffle mixes recent videos and Back catalog at the set ratio', () => {
   const db = setup('shuffle');
   addSource(db, 'list', NOW - DAY, [...recent('r1', 'r2', 'r3', 'r4', 'r5', 'r6'), ['o1', NOW - 400 * DAY, 10], ['o2', NOW - 400 * DAY, 10]]);
-  assert.equal(ids(db, NOW + 80 * MIN).map(id => id[0]).join(''), 'rrrorrro');
+  const blocks = ids(db, NOW + 400 * MIN).map(id => id[0]).join('').match(/.{4}/g)!;
+  assert.equal(blocks.length, 10);
+  for (const b of blocks) assert.equal(b.replace(/r/g, ''), 'o'); // one Back catalog video per 4
+  assert.ok(new Set(blocks).size > 1, 'its spot in the block varies');
 });
 
 test('past and current Slots never change', () => {
@@ -79,4 +82,13 @@ test('Filters keep Shorts, long videos and blocked words off a Channel', () => {
   db.exec("UPDATE channels SET max_minutes = 60, blocked_words = 'Sponsor, q&a'");
   addSource(db, 'list', NOW - DAY, [['ok', NOW - DAY, 10], ['long', NOW - DAY, 90], ['short', NOW - DAY, 1, 1], ['my sponsor', NOW - DAY, 10]]);
   assert.deepEqual(ids(db, NOW + 30 * MIN), ['ok', 'ok', 'ok']);
+});
+
+test('Skip livestreams drops them from YouTube channel Sources but playlists keep theirs', () => {
+  const db = setup('fixed');
+  db.exec('UPDATE channels SET skip_live = 1');
+  addSource(db, 'youtube_channel', NOW - DAY, [['vod', NOW - DAY, 10], ['stream', NOW - 2 * DAY, 10], ['both', NOW - 3 * DAY, 10]]);
+  addSource(db, 'playlist', NOW - DAY, [['both', NOW - 3 * DAY, 10]]);
+  db.exec("UPDATE videos SET is_live = 1 WHERE id IN ('stream', 'both')");
+  assert.deepEqual(ids(db, NOW + 30 * MIN), ['vod', 'both', 'vod']);
 });

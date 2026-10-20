@@ -10,6 +10,7 @@ export type Channel = {
   recent_ratio: number;
   recent_days: number;
   skip_shorts: number;
+  skip_live: number;
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;
@@ -26,7 +27,9 @@ function pool(db: Db, ch: Channel, now: number): Video[] {
     FROM sources s JOIN source_videos sv ON sv.source_id = s.id JOIN videos v ON v.id = sv.video_id
     WHERE s.channel_id = ? AND v.playable = 1 AND v.duration > 0
       AND NOT EXISTS (SELECT 1 FROM exclusions e WHERE e.channel_id = s.channel_id AND e.video_id = v.id)
-    ORDER BY s.position, s.id, CASE s.kind WHEN 'youtube_channel' THEN v.published_at ELSE sv.position END`).all(ch.id) as Video[];
+      -- Skipped per row, so a stream also in one of the Channel's playlists still airs from there
+      AND NOT (? AND s.kind = 'youtube_channel' AND v.is_live = 1)
+    ORDER BY s.position, s.id, CASE s.kind WHEN 'youtube_channel' THEN v.published_at ELSE sv.position END`).all(ch.id, ch.skip_live) as Video[];
   const words = ch.blocked_words.toLowerCase().split(',').map(w => w.trim()).filter(Boolean);
   const seen = new Set<string>();
   return rows.filter(v => {
@@ -67,7 +70,11 @@ function pick(ch: Channel, videos: Video[], s: State, at: number): Video | undef
   const cutoff = at - ch.recent_days * DAY;
   const recent = videos.filter(v => v.published_at >= cutoff);
   const back = videos.filter(v => v.published_at < cutoff);
-  let group = s.n % (ch.recent_ratio + 1) === ch.recent_ratio ? back : recent;
+  // One Back catalog Slot per block of ratio + 1, at a seeded spot in the block so it isn't exactly every nth Slot
+  const size = ch.recent_ratio + 1;
+  // Block number goes first so the rest of the string mixes it; FNV barely mixes a change at the end
+  const spot = Math.floor(hash(`${Math.floor(s.n / size)}:block:${ch.id}`) / 2 ** 32 * size);
+  let group = s.n % size === spot ? back : recent;
   if (!group.length) group = group === back ? recent : back;
   // No repeats: only the least-aired videos are eligible, and a seeded hash picks among them so the result is repeatable
   const min = group.reduce((m, v) => Math.min(m, s.counts.get(v.id) ?? 0), Infinity);

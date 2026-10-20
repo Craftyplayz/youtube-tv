@@ -55,16 +55,18 @@ async function saveVideos(db: Db, ids: string[], shorts: Set<string> | null) {
 }
 
 export async function refreshSource(db: Db, src: Source) {
-  const linked = (shortsOnly: boolean) => new Set((db.prepare(`
+  const linked = (flag?: 'is_short' | 'is_live') => new Set((db.prepare(`
     SELECT sv.video_id FROM source_videos sv JOIN videos v ON v.id = sv.video_id
-    WHERE sv.source_id = ? ${shortsOnly ? 'AND v.is_short = 1' : ''}`).all(src.id) as { video_id: string }[]).map(r => r.video_id));
+    WHERE sv.source_id = ? ${flag ? `AND v.${flag} = 1` : ''}`).all(src.id) as { video_id: string }[]).map(r => r.video_id));
   let ids: string[];
   let shorts: Set<string> | null = null;
+  let lives: string[] = [];
   if (src.kind === 'youtube_channel') {
-    // A YouTube channel's uploads playlist is its id with UC swapped for UU; UUSH holds just its Shorts
+    // A YouTube channel's uploads playlist is its id with UC swapped for UU; UUSH holds just its Shorts, UULV its livestreams
     const tail = src.ref.slice(2);
-    ids = await playlistItems('UU' + tail, linked(false));
-    shorts = new Set(await playlistItems('UUSH' + tail, linked(true)));
+    ids = await playlistItems('UU' + tail, linked());
+    shorts = new Set(await playlistItems('UUSH' + tail, linked('is_short')));
+    lives = await playlistItems('UULV' + tail, linked('is_live'));
   } else {
     ids = src.kind === 'playlist' ? await playlistItems(src.ref) : src.ref.split('\n');
   }
@@ -78,6 +80,9 @@ export async function refreshSource(db: Db, src: Source) {
     if (src.kind !== 'youtube_channel') db.prepare('DELETE FROM source_videos WHERE source_id = ?').run(src.id);
     const link = db.prepare('INSERT OR IGNORE INTO source_videos (source_id, video_id, position) VALUES (?, ?, ?)');
     ids.forEach((id, i) => link.run(src.id, id, i));
+    // Marked separately from saveVideos so streams saved before is_live existed get flagged too
+    const markLive = db.prepare('UPDATE videos SET is_live = 1 WHERE id = ?');
+    for (const id of lives) markLive.run(id);
     db.prepare('UPDATE sources SET refreshed_at = ? WHERE id = ?').run(Date.now(), src.id);
     db.exec('COMMIT');
   } catch (e) {
@@ -89,6 +94,22 @@ export async function refreshSource(db: Db, src: Source) {
 export async function refreshChannel(db: Db, channelId: number, olderThanMs: number) {
   const due = db.prepare('SELECT * FROM sources WHERE channel_id = ? AND refreshed_at < ?').all(channelId, Date.now() - olderThanMs) as Source[];
   for (const s of due) await refreshSource(db, s).catch(e => console.error(`Refreshing ${s.label} failed: ${e.message}`));
+}
+
+// The uploader's avatar for a Channel page's tab icon, remembered until the server restarts
+const avatars = new Map<string, Promise<string | null>>();
+export function avatar(videoId: string) {
+  if (!avatars.has(videoId)) avatars.set(videoId, (async () => {
+    const v = await yt('videos', { part: 'snippet', id: videoId });
+    const channelId = v?.items?.[0]?.snippet.channelId;
+    if (!channelId) return null;
+    const c = await yt('channels', { part: 'snippet', id: channelId });
+    return c?.items?.[0]?.snippet.thumbnails?.default?.url ?? null;
+  })().catch(e => {
+    avatars.delete(videoId); // a failed lookup is retried next time
+    throw e;
+  }));
+  return avatars.get(videoId)!;
 }
 
 // Turns whatever was pasted into the settings page into a Source

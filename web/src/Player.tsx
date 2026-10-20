@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
-import { api, go, now, schedule, type Lineup, type Slot } from './api.ts';
+import { api, go, now, schedule, setIcon, type Lineup, type Slot } from './api.ts';
 import Guide from './Guide.tsx';
 import Icon, { type IconName } from './Icon.tsx';
 
@@ -96,6 +96,7 @@ export default function Player({ slug }: { slug: string }) {
     return () => {
       clearInterval(t);
       clearTimeout(hideTimer.current);
+      setIcon();
       removeEventListener('fullscreenchange', onFullscreen);
       document.removeEventListener('visibilitychange', onVisibility);
     };
@@ -115,11 +116,14 @@ export default function Player({ slug }: { slug: string }) {
     setPos(0);
     showUi(4000);
     if (!slot) {
+      setIcon();
       yt.current.stopVideo();
       setTimeout(() => cur.current.channel === channel && !cur.current.slot && live(channel), 30_000); // off air: look again soon
       return;
     }
     yt.current.loadVideoById({ videoId: slot.videoId, startSeconds: fromStart ? 0 : (now() - slot.start) / 1000 });
+    api<{ url: string | null }>(`videos/${slot.videoId}/avatar`).catch(() => null)
+      .then(r => { if (cur.current.slot === slot) setIcon(r?.url ?? undefined); }); // ignore answers for videos already skipped past
   }
 
   async function live(channel: number) {

@@ -4,7 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join } from 'node:path';
 import { openDb } from './db.ts';
 import { queueNewUploads, schedule, type Channel } from './schedule.ts';
-import { refreshChannel, refreshSource, resolveSource, type Source } from './youtube.ts';
+import { avatar, refreshChannel, refreshSource, resolveSource, type Source } from './youtube.ts';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const DATA_DIR = process.env.DATA_DIR ?? 'data';
@@ -69,9 +69,9 @@ const routes: Route[] = [
     if (!ORDERINGS.includes(c.ordering)) throw new BadRequest('Unknown Ordering');
     db.prepare(`
       UPDATE channels SET name = ?, position = ?, ordering = ?, recent_ratio = ?, recent_days = ?,
-        skip_shorts = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
+        skip_shorts = ?, skip_live = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
       freeSlug(name(c.name), Number(id)), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
-      c.skip_shorts ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
+      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
     return null;
   }],
 
@@ -122,6 +122,8 @@ const routes: Route[] = [
     db.prepare('INSERT OR IGNORE INTO exclusions (channel_id, video_id) VALUES (?, ?)').run(c.id, b.videoId);
     return null;
   }],
+
+  ['GET', /^\/api\/videos\/([\w-]{11})\/avatar$/, async ([id]) => ({ url: await avatar(id) })],
 
   ['POST', /^\/api\/videos\/([\w-]{11})\/broken$/, ([id]) => {
     db.prepare('UPDATE videos SET playable = 0 WHERE id = ?').run(id);

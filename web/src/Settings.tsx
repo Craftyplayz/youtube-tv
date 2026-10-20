@@ -51,7 +51,7 @@ export default function Settings() {
           <form onSubmit={e => {
             e.preventDefault();
             const f = Object.fromEntries(new FormData(e.currentTarget));
-            run(() => api(`channels/${c.id}`, 'PUT', { ...f, skip_shorts: f.skip_shorts === 'on' }));
+            run(() => api(`channels/${c.id}`, 'PUT', { ...f, skip_shorts: f.skip_shorts === 'on', skip_live: f.skip_live === 'on' }));
           }}>
             <div className="row">
               <span className="number">{i + 1}</span>
@@ -69,6 +69,7 @@ export default function Settings() {
             <label>Recent videos per Back catalog video <input name="recent_ratio" type="number" min={0} defaultValue={c.recent_ratio} /></label>
             <label>Recent means newer than (days) <input name="recent_days" type="number" min={1} defaultValue={c.recent_days} /></label>
             <label>Skip Shorts <input name="skip_shorts" type="checkbox" defaultChecked={!!c.skip_shorts} /></label>
+            <label>Skip livestreams from YouTube channels (playlists keep theirs) <input name="skip_live" type="checkbox" defaultChecked={!!c.skip_live} /></label>
             <label>Max length (minutes) <input name="max_minutes" type="number" min={1} defaultValue={c.max_minutes ?? ''} placeholder="no limit" /></label>
             <label>Max age (days) <input name="max_age_days" type="number" min={1} defaultValue={c.max_age_days ?? ''} placeholder="no limit" /></label>
             <label>Blocked words (comma-separated) <input name="blocked_words" defaultValue={c.blocked_words} /></label>

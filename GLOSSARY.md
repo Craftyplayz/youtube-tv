@@ -19,7 +19,7 @@ A creator's channel on YouTube, used as one kind of Source. Always written in fu
 _Avoid_: Channel (on its own), creator
 
 **Filter**:
-A Channel's rule that keeps certain videos off it: Shorts, too long, too old, or a blocked keyword in the title.
+A Channel's rule that keeps certain videos off it: Shorts, too long, too old, a blocked keyword in the title, or a livestream from a YouTube channel Source (playlists and lists keep their livestreams).
 _Avoid_: Exclusion, block rule
 
 **Excluded video**:
