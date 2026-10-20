@@ -18,6 +18,7 @@ let interacted = false;
 for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => { interacted = true; }, { once: true, capture: true });
 
 const UNPLAYABLE = [100, 101, 150]; // removed, private, or embedding disabled
+const POPOUT = 'youtube-tv-popout'; // one shared window name, so popping out again reuses the same small window
 const LIVE_WITHIN = 15_000;
 
 function clock(ms: number) {
@@ -113,7 +114,7 @@ export default function Player({ slug }: { slug: string }) {
     hideTimer.current = window.setTimeout(() => (overControls.current ? showUi(ms) : setUi(false)), ms);
   }
 
-  function play(channel: number, slot: Slot | null, fromStart: boolean) {
+  function play(channel: number, slot: Slot | null, fromStart: boolean, at = now()) {
     cur.current = { channel, slot };
     setPos(0);
     showUi(4000);
@@ -123,17 +124,18 @@ export default function Player({ slug }: { slug: string }) {
       setTimeout(() => cur.current.channel === channel && !cur.current.slot && live(channel), 30_000); // off air: look again soon
       return;
     }
-    yt.current.loadVideoById({ videoId: slot.videoId, startSeconds: fromStart ? 0 : (now() - slot.start) / 1000 });
+    yt.current.loadVideoById({ videoId: slot.videoId, startSeconds: fromStart ? 0 : (at - slot.start) / 1000 });
     api<{ url: string | null }>(`videos/${slot.videoId}/avatar`).catch(() => null)
       .then(r => { if (cur.current.slot === slot) setIcon(r?.url ?? undefined); }); // ignore answers for videos already skipped past
   }
 
-  async function live(channel: number) {
-    const [l] = await schedule(now(), now() + 1, channel);
-    if (cur.current.channel === channel) play(channel, l?.slots[0] ?? null, false);
+  // Plays whatever airs at a moment: Live by default, or an earlier one for a popped-out window that was time-shifted
+  async function live(channel: number, at = now()) {
+    const [l] = await schedule(at, at + 1, channel);
+    if (cur.current.channel === channel) play(channel, l?.slots[0] ?? null, false, at);
   }
 
-  function tuneIn(channel: number, slot?: Slot) {
+  function tuneIn(channel: number, slot?: Slot, at?: number) {
     cur.current.channel = channel;
     const l = lineups?.find(x => x.id === channel);
     if (l) {
@@ -141,7 +143,16 @@ export default function Player({ slug }: { slug: string }) {
       document.title = `${l.name} · Youtube TV`;
     }
     api(`channels/${channel}/tune`, 'POST').catch(() => {}); // lets this Channel's New uploads get queued
-    return slot ? play(channel, slot, true) : live(channel);
+    return slot ? play(channel, slot, true) : live(channel, at);
+  }
+
+  // A small separate window to drag onto another screen; it picks up at this exact moment and this one pauses
+  function popOut() {
+    const { channel, slot } = cur.current;
+    const l = lineups?.find(x => x.id === channel);
+    if (!l || window.name === POPOUT) return;
+    const at = slot && Math.round(slot.start + (yt.current?.getCurrentTime?.() ?? 0) * 1000);
+    if (window.open(`/${l.slug}${at ? `?at=${at}` : ''}`, POPOUT, 'popup,width=640,height=360')) yt.current?.pauseVideo();
   }
 
   async function next() {
@@ -275,7 +286,7 @@ export default function Player({ slug }: { slug: string }) {
       events: {
         onReady: () => {
           yt.current.setVolume(vol.current);
-          tuneIn(target.id);
+          tuneIn(target.id, undefined, Number(new URLSearchParams(location.search).get('at')) || undefined);
           if (!interacted) setTimeout(checkAutoplay, 2000);
         },
         onStateChange: (e: { data: number }) => {
@@ -326,6 +337,7 @@ export default function Player({ slug }: { slug: string }) {
         case 'l': goLive(); break;
         case 'c': toggleCaptions(); break;
         case 'f': toggleFullscreen(); break;
+        case 'i': popOut(); break;
         case 'Escape': go('/'); break;
         default: return;
       }
@@ -454,6 +466,7 @@ export default function Player({ slug }: { slug: string }) {
               <Ctl icon="comments" label="Comments" onClick={() => setShowComments(s => !s)} className={showComments ? 'on' : ''} aria-pressed={showComments} disabled={!slot} />
               <Ctl icon="cc" label="Captions (c)" onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} />
               <Ctl icon="home" label="Channels (Esc)" onClick={() => go('/')} />
+              {window.name !== POPOUT && <Ctl icon="popout" label="Pop out into a small window (i)" onClick={popOut} />}
               <Ctl icon={fullscreen ? 'fullscreenExit' : 'fullscreen'} label={fullscreen ? 'Exit full screen (f)' : 'Full screen (f)'} onClick={toggleFullscreen} />
             </div>
           </div>
