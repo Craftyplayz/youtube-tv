@@ -25,7 +25,10 @@ button:disabled { opacity: .4; cursor: default; }
 .tv:has(.hud.hidden) { cursor: none; }
 .screen, .screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
 .splash { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; font-size: 1.5rem; cursor: pointer; }
-.splash small { color: var(--dim); font-size: 1rem; }
+.unmute {
+  position: absolute; top: 18px; right: 24px; display: flex; gap: 8px; align-items: center;
+  padding: 8px 16px; border: 0; border-radius: 20px; background: rgb(255 255 255 / .92); color: #000; font-weight: 600;
+}
 .click-layer { position: absolute; inset: 0; }
 /* Background tab: YouTube picks quality from the player's size, so a 200px player (its minimum) streams the lowest quality; sound keeps playing */
 .tv.background .screen iframe { width: 200px; height: 200px; }

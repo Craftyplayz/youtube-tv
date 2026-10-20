@@ -12,7 +12,7 @@ const ytReady = new Promise<void>(resolve => {
   document.head.append(Object.assign(document.createElement('script'), { src: 'https://www.youtube.com/iframe_api' }));
 });
 
-// Browsers only allow sound after a click or key press, so a Channel page opened directly asks for one first
+// Browsers can block sound until the page gets a click or key press, so a Channel page opened directly may start muted
 let interacted = false;
 for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => { interacted = true; }, { once: true, capture: true });
 
@@ -71,6 +71,8 @@ export default function Player({ slug }: { slug: string }) {
   const [flash, setFlash] = useState<{ icon: IconName; key: number } | null>(null);
   const [volume, setVolume] = useState(vol.current);
   const [muted, setMuted] = useState(false);
+  const [needsUnmute, setNeedsUnmute] = useState(false);
+  const swallowClick = useRef(false);
   const [captions, setCaptions] = useState(() => load('captions', 0) === 1);
   const captionsOn = useRef(captions);
   captionsOn.current = captions;
@@ -98,7 +100,7 @@ export default function Player({ slug }: { slug: string }) {
     };
   }, []);
 
-  useEffect(() => { if (target && interacted) start(); }, [lineups]);
+  useEffect(() => { if (target) start(); }, [lineups]);
 
   function showUi(ms: number) {
     setUi(true);
@@ -229,6 +231,23 @@ export default function Player({ slug }: { slug: string }) {
     showUi(1500);
   }
 
+  // Like YouTube: if the browser blocked sound on a direct visit, play muted and unmute on the first click or key press
+  function checkAutoplay() {
+    const p = yt.current;
+    const { PLAYING, BUFFERING } = window.YT.PlayerState;
+    if (interacted || !p || [PLAYING, BUFFERING].includes(p.getPlayerState())) return;
+    p.mute();
+    setMuted(true);
+    setNeedsUnmute(true);
+    p.playVideo();
+  }
+
+  function unmute() {
+    yt.current?.unMute();
+    setMuted(false);
+    setNeedsUnmute(false);
+  }
+
   async function exclude() {
     const { channel, slot } = cur.current;
     const name = lineups?.find(l => l.id === channel)?.name;
@@ -249,6 +268,7 @@ export default function Player({ slug }: { slug: string }) {
         onReady: () => {
           yt.current.setVolume(vol.current);
           tuneIn(target.id);
+          if (!interacted) setTimeout(checkAutoplay, 2000);
         },
         onStateChange: (e: { data: number }) => {
           const { ENDED, PLAYING, PAUSED } = window.YT.PlayerState;
@@ -275,7 +295,11 @@ export default function Player({ slug }: { slug: string }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!started) return void start();
+      if (!started) return;
+      if (needsUnmute) {
+        unmute();
+        if (e.key === 'm') return;
+      }
       if (guide) {
         if (e.key === 'Escape' || e.key === 'g') setGuide(false);
         return;
@@ -300,7 +324,13 @@ export default function Player({ slug }: { slug: string }) {
       e.preventDefault();
       showUi(2500);
     };
-    const onDown = (e: MouseEvent) => { if (e.button === 2) rightDown.current = true; };
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 2) rightDown.current = true;
+      if (needsUnmute) {
+        unmute();
+        swallowClick.current = !!(e.target as Element).closest?.('.click-layer'); // the unmuting click shouldn't also pause
+      }
+    };
     const onUp = (e: MouseEvent) => { if (e.button === 2) rightDown.current = false; };
     const onBlur = () => { rightDown.current = false; };
     // Hold right-click and scroll to change volume
@@ -335,17 +365,9 @@ export default function Player({ slug }: { slug: string }) {
   return (
     <div className={`tv ${background ? 'background' : ''}`} onMouseMove={() => showUi(1500)}>
       <div className="screen" ref={box} />
-      {!started && (
-        <div className="splash" onClick={start}>
-          {lineups === null ? 'Loading…' : target ? (
-            <>
-              <span>Click or press any key to tune in to {target.name}</span>
-              <small>Click pause · double-click full screen · ↑ ↓ Channel · ← → skip 5s · Shift+N/P next/previous video · K pause · M mute · C captions · G Guide · R Restart · L Go live · Esc Channels</small>
-              <small>Hold right-click and scroll to change volume</small>
-            </>
-          ) : (
-            <span>There's no Channel at /{slug}. <a href="/">See all Channels</a></span>
-          )}
+      {!started && (lineups === null || !target) && (
+        <div className="splash">
+          {lineups === null ? 'Loading…' : <span>There's no Channel at /{slug}. <a href="/">See all Channels</a></span>}
         </div>
       )}
       {started && (
@@ -354,6 +376,10 @@ export default function Player({ slug }: { slug: string }) {
           // A single click waits briefly so a double-click only toggles full screen, without pausing and resuming
           onClick={e => {
             clearTimeout(clickTimer.current);
+            if (swallowClick.current) {
+              swallowClick.current = false;
+              return;
+            }
             if (e.detail === 1) clickTimer.current = window.setTimeout(togglePause, 300);
           }}
           onDoubleClick={toggleFullscreen}
@@ -423,6 +449,11 @@ export default function Player({ slug }: { slug: string }) {
             </div>
           </div>
         </div>
+      )}
+      {needsUnmute && (
+        <button className="unmute" onClick={unmute}>
+          <Icon name="muted" /> Click to unmute
+        </button>
       )}
       {guide && (
         <Guide
