@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Channel } from './api.ts';
+import { app } from './app.ts';
 
 const ORDERINGS = { shuffle: 'Shuffle', new_first: 'New uploads first', fixed: 'Fixed order' };
 const KINDS = { youtube_channel: 'YouTube channel', playlist: 'Playlist', list: 'Hand-picked list' };
@@ -45,6 +46,7 @@ export default function Settings() {
       <header>
         <h1>Channels</h1>
         <a href="/">Back to Channels</a>
+        {app && <button onClick={() => app!.changeServer()}>Server address</button>}
         <button onClick={newChannel} disabled={busy}>+ New Channel</button>
       </header>
       {error && <p className="error">{error}</p>}

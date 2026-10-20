@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- web/public/favicon.svg, centred in the adaptive icon's 66dp safe zone -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="33" android:translateY="39" android:scaleX="1.5" android:scaleY="1.5">
+        <path
+            android:fillColor="#f00"
+            android:pathData="M27.4,3.1A3.5,3.5 0,0 0,24.9 0.6C22.7,0 14,0 14,0S5.3,0 3.1,0.6A3.5,3.5 0,0 0,0.6 3.1C0,5.3 0,10 0,10s0,4.7 0.6,6.9a3.5,3.5 0,0 0,2.5 2.5C5.3,20 14,20 14,20s8.7,0 10.9,-0.6a3.5,3.5 0,0 0,2.5 -2.5C28,14.7 28,10 28,10s0,-4.7 -0.6,-6.9z" />
+        <path android:fillColor="#fff" android:pathData="M11.2,14.3 L18.5,10l-7.3,-4.3z" />
+    </group>
+</vector>

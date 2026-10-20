@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Youtube TV</string>
+    <string name="server_title">Server address</string>
+    <string name="server_hint">http://192.168.1.20:2345</string>
+    <string name="server_message">The address you open Youtube TV at in a browser on your home network.</string>
+    <string name="unreachable">Can\'t reach %1$s</string>
+    <string name="retry">Try again</string>
+    <string name="change">Change address</string>
+    <string name="previous">Previous video</string>
+    <string name="next">Next video</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+</resources>

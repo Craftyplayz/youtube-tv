@@ -16,11 +16,19 @@ function App() {
       e.preventDefault();
       go(a.pathname);
     };
+    // The Android app's back button: Settings goes back to Channels, and from Channels the app closes (a Channel handles its own)
+    const onBack = (e: Event) => {
+      if (location.pathname !== '/settings') return;
+      e.preventDefault();
+      go('/');
+    };
     addEventListener('popstate', onPop);
     addEventListener('click', onClick);
+    addEventListener('app-back', onBack);
     return () => {
       removeEventListener('popstate', onPop);
       removeEventListener('click', onClick);
+      removeEventListener('app-back', onBack);
     };
   }, []);
   if (path === '/') return <Home />;

@@ -20,6 +20,16 @@ The player copies YouTube's: click to pause, double-click for full screen, drag 
 
 ↑ ↓ change Channel · ← → skip 5s · Shift+N / Shift+P next / previous video · Space/K pause · M mute · C captions · F full screen · G Guide · R Restart · L Go live · Esc back to Channels · hold right-click and scroll for volume
 
+## Android app
+
+The app in `android/` shows your server's page full screen with phone controls modelled on YouTube's app: tap to show or hide the controls, double-tap either side to skip 10s, turn the phone sideways (or tap the full screen button) for full screen, and the back button closes things. Picture-in-picture keeps the video in a small window over other apps, and starts by itself when you leave the app while a video plays. Leaving the app any other way pauses: YouTube's player doesn't allow background play.
+
+Install `youtube-tv.apk` from a release (or the **Android app** workflow's artifacts) and allow installing from unknown sources. On first launch, enter the address you use in the browser, e.g. `http://192.168.1.20:2345`; change it later under **Settings** → **Server address**. The app loads its page from the server, so page changes reach it when you update the server.
+
+To install new versions over old ones, every APK must be signed with the same key. Make one once and keep it safe: `keytool -genkey -keystore household.jks -alias youtube-tv -keyalg RSA -validity 10000` (same password for the keystore and the key), then add repository secrets `ANDROID_KEYSTORE_BASE64` (output of `base64 -w0 household.jks`) and `ANDROID_KEYSTORE_PASSWORD`. Without them each build is signed with a throwaway debug key, and updating means uninstalling first.
+
+Build locally with the Android SDK: `cd android && ./gradlew assembleRelease`.
+
 ## Develop
 
 ```sh

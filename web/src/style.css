@@ -23,6 +23,7 @@ button:disabled { opacity: .4; cursor: default; }
 /* Player */
 .tv { position: fixed; inset: 0; background: #000; overflow: hidden; }
 .tv:has(.hud.hidden) { cursor: none; }
+.stage { position: absolute; inset: 0; }
 .screen, .screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
 .splash { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; font-size: 1.5rem; cursor: pointer; }
 .unmute {
@@ -103,6 +104,41 @@ button:disabled { opacity: .4; cursor: default; }
   background: none; color: #3ea6ff; font-size: .85rem; font-weight: 600;
 }
 .replies-toggle:hover { background: rgb(62 166 255 / .2); }
+.flash.left { left: 25%; }
+.flash.right { left: 75%; }
+
+/* Phone controls in the Android app, modelled on YouTube's app: the video dims while they show */
+.phone .hud { background: rgb(0 0 0 / .45); }
+.phone .hud button { pointer-events: auto; }
+.phone .hud-top { display: flex; align-items: start; gap: 8px; padding: 6px 6px 0 16px; }
+.phone .hud-top .info { flex: 1; display: grid; gap: 2px; min-width: 0; padding-top: 10px; }
+.phone .hud-top .title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.middle { display: flex; justify-content: center; align-items: center; gap: 48px; }
+.middle button { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: rgb(0 0 0 / .35); }
+.middle button.big { width: 64px; height: 64px; }
+.middle button.big svg { width: 40px; height: 40px; }
+.phone .hud-bottom { padding: 0 8px 4px 16px; }
+.phone .time { margin: 0 4px 0 0; }
+.phone .progress { margin: 0 0 6px; }
+.phone .progress::before { inset: -14px 0; }
+.phone .progress-played::after { transform: translateY(-50%) scale(1); }
+/* Held upright: video on top, details and Comments underneath */
+.tv.phone:not(.full) { display: flex; flex-direction: column; background: var(--bg); }
+.tv.phone:not(.full) .stage { position: relative; flex: none; aspect-ratio: 16 / 9; background: #000; }
+.below { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.details { display: grid; gap: 4px; padding: 12px 16px 4px; }
+.details .ch { color: var(--accent); font-weight: 700; }
+.details .title { font-size: 1.1rem; font-weight: 600; }
+.details .by { color: var(--dim); }
+.chips { display: flex; gap: 8px; padding: 8px 16px 12px; overflow-x: auto; scrollbar-width: none; }
+.chips button { flex: none; display: flex; gap: 6px; align-items: center; padding: 6px 14px; border: 0; border-radius: 18px; background: rgb(255 255 255 / .1); }
+.chips button.on { background: #fff; color: #000; }
+.chips svg { width: 20px; height: 20px; }
+.below .comments { position: static; flex: 1; width: auto; padding-bottom: 16px; background: none; border-top: 1px solid var(--line); border-radius: 0; }
+.below .comments header { background: var(--bg); }
+/* Picture-in-picture shows the video alone */
+.tv.pip .stage { position: absolute; inset: 0; aspect-ratio: auto; }
+.tv.pip :is(.hud, .flash, .unmute, .volume-osd, .comments, .below, .guide) { display: none; }
 @keyframes osd { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes flash { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
 
