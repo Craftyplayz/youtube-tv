@@ -345,7 +345,7 @@ export default function Player({ slug }: { slug: string }) {
     const onWheel = (e: WheelEvent) => {
       if (!started || !rightDown.current) return;
       e.preventDefault();
-      changeVolume(vol.current - Math.sign(e.deltaY) * 5);
+      changeVolume(vol.current - Math.sign(e.deltaY));
     };
     const noMenu = (e: MouseEvent) => e.preventDefault();
     addEventListener('keydown', onKey);
