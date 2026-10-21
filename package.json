@@ -7,7 +7,7 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "node server/main.ts",
-    "test": "node --test \"server/*.test.ts\"",
+    "test": "node --test \"server/*.test.ts\" \"web/src/*.test.ts\"",
     "typecheck": "tsc"
   },
   "dependencies": {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Channel, type Source } from './api.ts';
+import { rebalance } from './shares.ts';
 
 const ORDERINGS = { shuffle: 'Shuffle', new_first: 'New uploads first', fixed: 'Fixed order' };
 const KINDS = { youtube_channel: 'YouTube channel', playlist: 'Playlist', list: 'Hand-picked list' };
@@ -30,10 +31,11 @@ export default function Settings() {
     api(`channels/${b.id}`, 'PUT', { position: a.position }),
   ]));
 
-  // Moves the slider and its percentages straight away; saveShare stores it once the slider is let go
-  const setShare = (s: Source, share: number) =>
-    setChannels(cs => cs.map(c => ({ ...c, sources: c.sources.map(x => x.id === s.id ? { ...x, share } : x) })));
-  const saveShare = (s: Source) => api(`sources/${s.id}`, 'PUT', { share: s.share }).catch(e => setError(e.message));
+  // Moves every slider of the Channel straight away; saveShares stores them once the slider is let go
+  const setShare = (c: Channel, s: Source, percent: number) =>
+    setChannels(cs => cs.map(x => x.id === c.id ? { ...x, sources: rebalance(x.sources, s.id, percent) } : x));
+  const saveShares = (c: Channel) =>
+    Promise.all(c.sources.map(s => api(`sources/${s.id}`, 'PUT', { share: s.share }))).catch(e => setError(e.message));
 
   const toggle = (id: number) => setOpen(o => o.includes(id) ? o.filter(x => x !== id) : [...o, id]);
 
@@ -106,9 +108,9 @@ export default function Settings() {
                     {s.label} <small>{KINDS[s.kind]} · {s.videos} videos</small>
                     {!!c.by_share && (
                       <span className="share">
-                        <input type="range" min={1} max={100} value={s.share} aria-label={`Share for ${s.label}`}
-                          onChange={e => setShare(s, Number(e.target.value))}
-                          onPointerUp={() => saveShare(s)} onKeyUp={() => saveShare(s)} />
+                        <input type="range" min={1} max={100} value={Math.round(s.share / totalShare * 100)} aria-label={`Share for ${s.label}`}
+                          onChange={e => setShare(c, s, Number(e.target.value))}
+                          onPointerUp={() => saveShares(c)} onKeyUp={() => saveShares(c)} />
                         <output>{Math.round(s.share / totalShare * 100)}%</output>
                         {/* videos aired for every 1 from the lowest-Share Source */}
                         <output>{+(s.share / minShare).toFixed(1)} video{s.share === minShare ? '' : 's'}</output>
