@@ -61,12 +61,18 @@ export function openDb(file: string): Db {
       video_id TEXT NOT NULL,
       PRIMARY KEY (channel_id, video_id)
     );
-    CREATE TABLE IF NOT EXISTS watch (
+    CREATE TABLE IF NOT EXISTS views (
       channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      ip TEXT NOT NULL,
-      seconds INTEGER NOT NULL,                   -- total time this IP has had the Channel playing
+      device TEXT NOT NULL,                       -- random id each browser keeps in its storage
+      agent TEXT NOT NULL,                        -- the device's latest User-Agent
+      seconds INTEGER NOT NULL,                   -- total time this device has had the Channel playing
       last_at INTEGER NOT NULL,
-      PRIMARY KEY (channel_id, ip)
+      PRIMARY KEY (channel_id, device)
+    );
+    CREATE TABLE IF NOT EXISTS sightings (        -- every IP each device has watched from; links devices into one Viewer
+      device TEXT NOT NULL,
+      ip TEXT NOT NULL,
+      PRIMARY KEY (device, ip)
     );
   `);
   // Columns added later: CREATE TABLE IF NOT EXISTS leaves existing tables as they were
@@ -79,5 +85,10 @@ export function openDb(file: string): Db {
     const names = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
     if (!names.includes(column.split(' ')[0])) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);
   }
+  // Viewing time from v0.4.15 was kept per IP; each IP carries over as one device
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'watch'").get()) db.exec(`
+    INSERT OR IGNORE INTO views SELECT channel_id, 'ip:' || ip, '', seconds, last_at FROM watch;
+    INSERT OR IGNORE INTO sightings SELECT 'ip:' || ip, ip FROM watch;
+    DROP TABLE watch;`);
   return db;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { go, now, schedule, thumb, watched, type Lineup } from './api.ts';
+import { go, now, schedule, thumb, watched, watchedExactly, type Lineup } from './api.ts';
 
 // Every Channel and what's on it right now
 export default function Home() {
@@ -41,7 +41,7 @@ export default function Home() {
                     {s ? <img src={thumb(s.videoId)} alt="" /> : <span className="off">Off air</span>}
                     <span className="card-name"><b>{lineups.indexOf(l) + 1}</b>{l.name}</span>
                     <span className="card-now">{s ? s.title : 'Off air'}</span>
-                    <span className="card-watched">{watched(l.watched)} watched</span>
+                    <span className="card-watched" title={watchedExactly(l.watched)}>{watched(l.watched)} watched</span>
                     {s && <progress max={s.end - s.start} value={now() - s.start} />}
                   </a>
                 </li>

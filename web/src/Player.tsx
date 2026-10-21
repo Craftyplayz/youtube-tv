@@ -53,6 +53,13 @@ function store(key: string, value: number) {
   } catch { /* storage blocked */ }
 }
 
+// Tells this browser apart in Viewers; randomUUID needs HTTPS, which a home server usually lacks
+let device = Math.random().toString(36).slice(2) + Date.now().toString(36);
+try {
+  device = localStorage.getItem('device') ?? device;
+  localStorage.setItem('device', device);
+} catch { /* storage blocked: a new device each visit */ }
+
 const toggleFullscreen = () =>
   (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
 
@@ -108,7 +115,7 @@ export default function Player({ slug }: { slug: string }) {
     }, 500);
     const watching = setInterval(() => {
       if (cur.current.channel && yt.current?.getPlayerState?.() === window.YT.PlayerState.PLAYING)
-        api(`channels/${cur.current.channel}/watch`, 'POST').catch(() => {});
+        api(`channels/${cur.current.channel}/watch`, 'POST', { device }).catch(() => {});
     }, WATCH_EVERY);
     const onFullscreen = () => {
       setFullscreen(!!document.fullscreenElement);

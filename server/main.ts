@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
 import { openDb } from './db.ts';
+import { linkViewers } from './viewers.ts';
 import { queueNewUploads, schedule, type Channel } from './schedule.ts';
 import { comments, refreshChannel, refreshSource, replies, resolveSource, splitSources, timedComments, uploader, type Source } from './youtube.ts';
 
@@ -152,11 +153,32 @@ const routes: Route[] = [
   ['GET', /^\/api\/admin$/, admin(() => null)],
 
   ['GET', /^\/api\/admin\/viewers$/, admin(async () => {
-    const rows = db.prepare(`
-      SELECT w.ip, c.name AS channel, w.seconds, w.last_at FROM watch w JOIN channels c ON c.id = w.channel_id
-      ORDER BY w.seconds DESC`).all() as { ip: string }[];
-    const where = await locate([...new Set(rows.map(r => r.ip))]);
-    return rows.map(r => ({ ...r, location: where.get(r.ip) ?? 'Unknown' }));
+    const views = db.prepare('SELECT v.device, v.agent, c.name AS channel, v.seconds, v.last_at FROM views v JOIN channels c ON c.id = v.channel_id')
+      .all() as { device: string; agent: string; channel: string; seconds: number; last_at: number }[];
+    const sightings = db.prepare('SELECT device, ip FROM sightings').all() as { device: string; ip: string }[];
+    const where = await locate([...new Set(sightings.map(s => s.ip))]);
+    const viewerOf = linkViewers(sightings);
+    const viewers = new Map<string, {
+      devices: Record<string, { agent: string; last_at: number }>; ips: { ip: string; location: string }[];
+      channels: Record<string, number>; seconds: number; last_at: number;
+    }>();
+    for (const v of views) {
+      const key = viewerOf(v.device);
+      const w = viewers.get(key) ?? viewers.set(key, { devices: {}, ips: [], channels: {}, seconds: 0, last_at: 0 }).get(key)!;
+      if (!(w.devices[v.device]?.last_at >= v.last_at)) w.devices[v.device] = { agent: v.agent, last_at: v.last_at };
+      w.channels[v.channel] = (w.channels[v.channel] ?? 0) + v.seconds;
+      w.seconds += v.seconds;
+      w.last_at = Math.max(w.last_at, v.last_at);
+    }
+    for (const s of sightings) {
+      const ips = viewers.get(viewerOf(s.device))?.ips;
+      if (ips && !ips.some(x => x.ip === s.ip)) ips.push({ ip: s.ip, location: where.get(s.ip) ?? 'Unknown' });
+    }
+    return [...viewers.values()].sort((a, b) => b.seconds - a.seconds).map(w => ({
+      ...w,
+      devices: Object.values(w.devices).sort((a, b) => b.last_at - a.last_at),
+      channels: Object.entries(w.channels).sort(([, a], [, b]) => b - a).map(([channel, seconds]) => ({ channel, seconds })),
+    }));
   })],
 
   ['POST', /^\/api\/channels\/(\d+)\/tune$/, ([id]) => {
@@ -166,12 +188,15 @@ const routes: Route[] = [
     return null;
   }],
 
-  // A playing Screen calls this every WATCH_EVERY seconds; calls sooner from the same IP and Channel don't add more
-  ['POST', /^\/api\/channels\/(\d+)\/watch$/, ([id], _, __, req) => {
+  // A playing Screen calls this every WATCH_EVERY seconds; calls sooner from the same device and Channel don't add more
+  ['POST', /^\/api\/channels\/(\d+)\/watch$/, ([id], b, __, req) => {
+    if (typeof b.device !== 'string' || !/^[\w-]{8,40}$/.test(b.device)) throw new BadRequest('Bad device id');
     db.prepare(`
-      INSERT INTO watch (channel_id, ip, seconds, last_at) VALUES (?, ?, ?, ?)
-      ON CONFLICT DO UPDATE SET seconds = seconds + excluded.seconds, last_at = excluded.last_at
-      WHERE excluded.last_at - last_at >= ?`).run(channel(id).id, clientIp(req), WATCH_EVERY, Date.now(), (WATCH_EVERY - 5) * 1000);
+      INSERT INTO views (channel_id, device, agent, seconds, last_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT DO UPDATE SET seconds = seconds + excluded.seconds, agent = excluded.agent, last_at = excluded.last_at
+      WHERE excluded.last_at - last_at >= ?`).run(
+      channel(id).id, b.device, String(req.headers['user-agent'] ?? '').slice(0, 300), WATCH_EVERY, Date.now(), (WATCH_EVERY - 5) * 1000);
+    db.prepare('INSERT OR IGNORE INTO sightings (device, ip) VALUES (?, ?)').run(b.device, clientIp(req));
     return null;
   }],
 
@@ -186,7 +211,7 @@ const routes: Route[] = [
       channels: channels().filter(c => !only || c.id === Number(only))
         .map(c => ({
           id: c.id, name: c.name, slug: slug(c.name, c.id), slots: schedule(db, c, from, to, now),
-          watched: (db.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM watch WHERE channel_id = ?').get(c.id) as { s: number }).s,
+          watched: (db.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM views WHERE channel_id = ?').get(c.id) as { s: number }).s,
         })),
     };
   }],

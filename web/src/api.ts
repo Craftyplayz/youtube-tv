@@ -34,8 +34,17 @@ export function go(path: string) {
 let skew = 0; // server clock minus this machine's clock, so every Screen agrees on what is Live
 export const now = () => Date.now() + skew;
 
-// Total time every Screen has had a Channel playing, e.g. "45 min" or "12.5 h"
-export const watched = (seconds: number) => seconds < 3600 ? `${Math.round(seconds / 60)} min` : `${(seconds / 3600).toFixed(1)} h`;
+// Viewing time, rounded for reading: "45 min", "12.5 hours", "10.7 days"
+export const watched = (seconds: number) =>
+  seconds < 3600 ? `${Math.round(seconds / 60)} min`
+    : seconds < 86_400 ? `${(seconds / 3600).toFixed(1)} hours`
+    : `${(seconds / 86_400).toFixed(1)} days`;
+
+// The same exactly, for hovering: "254 hours 11 minutes"
+export function watchedExactly(seconds: number) {
+  const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
+  return [h && `${h} hour${h === 1 ? '' : 's'}`, `${m} minute${m === 1 ? '' : 's'}`].filter(Boolean).join(' ');
+}
 
 // The Admin password, remembered on this Screen once it's right
 let password = '';

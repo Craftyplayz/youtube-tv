@@ -1,8 +1,25 @@
 import { useEffect, useState } from 'react';
-import { api, setPassword, watched } from './api.ts';
+import { api, setPassword, watched, watchedExactly } from './api.ts';
 import Settings from './Settings.tsx';
 
-type Row = { ip: string; location: string; channel: string; seconds: number; last_at: number };
+// Devices and IPs linked into one person; see linkViewers on the server
+type Viewer = {
+  devices: { agent: string; last_at: number }[];
+  ips: { ip: string; location: string }[];
+  channels: { channel: string; seconds: number }[];
+  seconds: number;
+  last_at: number;
+};
+
+// "Chrome on Windows" from a User-Agent; order matters, since Edge and Opera also claim Chrome, and Chrome claims Safari
+function deviceName(agent: string) {
+  if (!agent) return 'Unknown device'; // tracked per IP before devices were
+  const browser = [['Edg/', 'Edge'], ['OPR/', 'Opera'], ['SamsungBrowser', 'Samsung Internet'], ['Firefox/', 'Firefox'], ['Chrome/', 'Chrome'], ['Safari/', 'Safari']]
+    .find(([k]) => agent.includes(k))?.[1] ?? 'Browser';
+  const os = [['SMART-TV', 'Smart TV'], ['Tizen', 'Samsung TV'], ['Web0S', 'LG TV'], ['CrOS', 'ChromeOS'], ['Android', 'Android'], ['iPhone', 'iPhone'], ['iPad', 'iPad'], ['Windows', 'Windows'], ['Mac OS', 'Mac'], ['Linux', 'Linux']]
+    .find(([k]) => agent.includes(k))?.[1];
+  return os ? `${browser} on ${os}` : browser;
+}
 
 // Asks for the Admin password, then shows Channel editing or Viewers
 export default function Admin({ page }: { page: 'channels' | 'viewers' }) {
@@ -40,15 +57,11 @@ export default function Admin({ page }: { page: 'channels' | 'viewers' }) {
   );
 }
 
-// Viewing time per IP, most-watched first, with a rough location for each
+// Viewing time per device, most-watched first, with its latest IP and a rough location
 function Viewers() {
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [viewers, setViewers] = useState<Viewer[] | null>(null);
   const [error, setError] = useState('');
-  useEffect(() => { api<Row[]>('admin/viewers').then(setRows, e => setError(e.message)); }, []);
-
-  const ips = new Map<string, Row[]>();
-  for (const r of rows ?? []) ips.set(r.ip, [...ips.get(r.ip) ?? [], r]);
-  const total = (list: Row[]) => list.reduce((a, r) => a + r.seconds, 0);
+  useEffect(() => { api<Viewer[]>('admin/viewers').then(setViewers, e => setError(e.message)); }, []);
 
   return (
     <main className="settings">
@@ -58,17 +71,18 @@ function Viewers() {
         <a href="/">Back to Channels</a>
       </header>
       {error && <p className="error">{error}</p>}
-      {rows === null ? !error && <p>Loading…</p>
-        : !rows.length ? <p>Nobody has watched anything yet.</p>
-        : [...ips].sort(([, a], [, b]) => total(b) - total(a)).map(([ip, list]) => (
-          <section key={ip} className="channel">
+      {viewers === null ? !error && <p>Loading…</p>
+        : !viewers.length ? <p>Nobody has watched anything yet.</p>
+        : viewers.map((v, i) => (
+          <section key={i} className="channel">
             <div className="row">
-              <b>{ip}</b>
-              <small className="dim">{list[0].location} · last seen {new Date(Math.max(...list.map(r => r.last_at))).toLocaleString()}</small>
-              <b className="watched">{watched(total(list))}</b>
+              <b>{[...new Set(v.devices.map(d => deviceName(d.agent)))].join(' · ')}</b>
+              <small className="dim">last seen {new Date(v.last_at).toLocaleString()}</small>
+              <b className="watched" title={watchedExactly(v.seconds)}>{watched(v.seconds)}</b>
             </div>
+            <small className="dim">{v.ips.map(x => `${x.ip} (${x.location})`).join(' · ')}</small>
             <ul className="sources">
-              {list.map(r => <li key={r.channel}>{r.channel} <small>{watched(r.seconds)}</small></li>)}
+              {v.channels.map(c => <li key={c.channel}>{c.channel} <small title={watchedExactly(c.seconds)}>{watched(c.seconds)}</small></li>)}
             </ul>
           </section>
         ))}
