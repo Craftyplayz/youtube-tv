@@ -12,6 +12,7 @@ export type Channel = {
   skip_shorts: number;
   skip_live: number;
   by_share: number;
+  by_age: number;
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;
@@ -75,15 +76,18 @@ function pick(ch: Channel, videos: Video[], s: State, at: number): Video | undef
     const source = [...shares].find(([, w]) => (r -= w) < 0)?.[0];
     videos = videos.filter(v => v.source_id === source);
   }
-  const cutoff = at - ch.recent_days * DAY;
-  const recent = videos.filter(v => v.published_at >= cutoff);
-  const back = videos.filter(v => v.published_at < cutoff);
-  // One Back catalog Slot per block of ratio + 1, at a seeded spot in the block so it isn't exactly every nth Slot
-  const size = ch.recent_ratio + 1;
-  // Block number goes first so the rest of the string mixes it; FNV barely mixes a change at the end
-  const spot = Math.floor(hash(`${Math.floor(s.n / size)}:block:${ch.id}`) / 2 ** 32 * size);
-  let group = s.n % size === spot ? back : recent;
-  if (!group.length) group = group === back ? recent : back;
+  let group = videos;
+  if (ch.by_age) {
+    const cutoff = at - ch.recent_days * DAY;
+    const recent = videos.filter(v => v.published_at >= cutoff);
+    const back = videos.filter(v => v.published_at < cutoff);
+    // One Back catalog Slot per block of ratio + 1, at a seeded spot in the block so it isn't exactly every nth Slot
+    const size = ch.recent_ratio + 1;
+    // Block number goes first so the rest of the string mixes it; FNV barely mixes a change at the end
+    const spot = Math.floor(hash(`${Math.floor(s.n / size)}:block:${ch.id}`) / 2 ** 32 * size);
+    group = s.n % size === spot ? back : recent;
+    if (!group.length) group = group === back ? recent : back;
+  }
   // No repeats: only the least-aired videos are eligible, and a seeded hash picks among them so the result is repeatable
   const min = group.reduce((m, v) => Math.min(m, s.counts.get(v.id) ?? 0), Infinity);
   let best: Video | undefined;

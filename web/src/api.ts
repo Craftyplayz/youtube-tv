@@ -12,6 +12,7 @@ export type Channel = {
   skip_shorts: number;
   skip_live: number;
   by_share: number;
+  by_age: number;
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;

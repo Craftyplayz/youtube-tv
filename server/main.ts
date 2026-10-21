@@ -105,9 +105,9 @@ const routes: Route[] = [
     if (!ORDERINGS.includes(c.ordering)) throw new BadRequest('Unknown Ordering');
     db.prepare(`
       UPDATE channels SET name = ?, position = ?, ordering = ?, recent_ratio = ?, recent_days = ?,
-        skip_shorts = ?, skip_live = ?, by_share = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
+        skip_shorts = ?, skip_live = ?, by_share = ?, by_age = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
       freeSlug(name(c.name), Number(id)), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
-      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, c.by_share ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
+      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, c.by_share ? 1 : 0, c.by_age ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
     return null;
   })],
 

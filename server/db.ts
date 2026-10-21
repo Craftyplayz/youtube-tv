@@ -81,6 +81,7 @@ export function openDb(file: string): Db {
     ['videos', 'is_live INTEGER NOT NULL DEFAULT 0'],   // a livestream (past, live or upcoming) in its YouTube channel's live tab
     ['channels', 'by_share INTEGER NOT NULL DEFAULT 0'], // mix Sources by their Share instead of airing every video equally often
     ['sources', 'share INTEGER NOT NULL DEFAULT 50'],    // 1 to 100, weighed against the Channel's other Sources
+    ['channels', 'by_age INTEGER NOT NULL DEFAULT 1'],   // mix recent videos and Back catalog at recent_ratio; off airs every age equally often
   ]) {
     const names = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
     if (!names.includes(column.split(' ')[0])) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

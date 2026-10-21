@@ -35,7 +35,7 @@ A Channel's own rule for the sequence its videos air in: Shuffle, New uploads fi
 _Avoid_: Sort, play mode
 
 **Shuffle**:
-The default Ordering: a set mix of recent videos and Back catalog (e.g. 3 to 1), each drawn at random with no repeats until that group has all aired.
+The default Ordering: a set mix of recent videos and Back catalog (e.g. 3 to 1), each drawn at random with no repeats until that group has all aired. With the mix turned off, every video is drawn equally whatever its age.
 
 **Back catalog**:
 A Channel's videos older than its recent cut-off (e.g. 6 months).

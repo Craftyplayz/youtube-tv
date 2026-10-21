@@ -82,7 +82,7 @@ export default function Settings() {
               <form onSubmit={e => {
                 e.preventDefault();
                 const f = Object.fromEntries(new FormData(e.currentTarget));
-                run(() => api(`channels/${c.id}`, 'PUT', { ...f, skip_shorts: f.skip_shorts === 'on', skip_live: f.skip_live === 'on', by_share: f.by_share === 'on' }));
+                run(() => api(`channels/${c.id}`, 'PUT', { ...f, skip_shorts: f.skip_shorts === 'on', skip_live: f.skip_live === 'on', by_share: f.by_share === 'on', by_age: f.by_age === 'on' }));
               }}>
                 <label>Name <input name="name" defaultValue={c.name} required /></label>
                 <label>Ordering
@@ -91,6 +91,7 @@ export default function Settings() {
                   </select>
                 </label>
                 <label>Mix Sources by the Share set on each below, instead of every video equally often (not in Fixed order) <input name="by_share" type="checkbox" defaultChecked={!!c.by_share} /></label>
+                <label>Mix recent videos and Back catalog by the two settings below, instead of every age equally often (not in Fixed order) <input name="by_age" type="checkbox" defaultChecked={!!c.by_age} /></label>
                 <label>Recent videos per Back catalog video <input name="recent_ratio" type="number" min={0} defaultValue={c.recent_ratio} /></label>
                 <label>Recent means newer than (days) <input name="recent_days" type="number" min={1} defaultValue={c.recent_days} /></label>
                 <label>Skip Shorts <input name="skip_shorts" type="checkbox" defaultChecked={!!c.skip_shorts} /></label>

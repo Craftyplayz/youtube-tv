@@ -43,6 +43,15 @@ test('Shuffle mixes recent videos and Back catalog at the set ratio', () => {
   assert.ok(new Set(blocks).size > 1, 'its spot in the block varies');
 });
 
+test('With the age mix off, Shuffle draws every video equally whatever its age', () => {
+  const db = setup('shuffle');
+  db.prepare('UPDATE channels SET by_age = 0').run();
+  // 2 recent and 6 old: mixed 3 to 1, the recent pair would repeat before the old ones all aired
+  const old = (...names: string[]): V[] => names.map(n => [n, NOW - 400 * DAY, 10]);
+  addSource(db, 'list', NOW - DAY, [...recent('r1', 'r2'), ...old('o1', 'o2', 'o3', 'o4', 'o5', 'o6')]);
+  assert.equal(new Set(ids(db, NOW + 80 * MIN)).size, 8, 'all 8 air once before any repeats');
+});
+
 test('Mixing by Share splits airtime between Sources whatever their size', () => {
   // How often the 2-video Source airs next to an 8-video one, over 400 Slots
   const small = (byShare: number, bigShare = 50, smallShare = 50) => {
