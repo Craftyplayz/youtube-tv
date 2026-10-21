@@ -205,6 +205,7 @@ button:disabled { opacity: .4; cursor: default; }
 .share { display: flex; gap: 8px; align-items: center; }
 .share input { width: 120px; padding: 0; accent-color: var(--accent); }
 .share output { width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.share output + output { width: 10ch; color: var(--dim); }
 textarea { width: 100%; resize: vertical; }
 .error { color: #ff8a80; white-space: pre-line; }
 .busy { color: var(--dim); }

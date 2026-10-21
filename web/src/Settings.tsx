@@ -59,6 +59,7 @@ export default function Settings() {
       {channels.map((c, i) => {
         const isOpen = open.includes(c.id);
         const totalShare = c.sources.reduce((a, s) => a + s.share, 0);
+        const minShare = Math.min(...c.sources.map(s => s.share));
         return (
           <section key={c.id} className="channel">
             <div className="row">
@@ -109,6 +110,8 @@ export default function Settings() {
                           onChange={e => setShare(s, Number(e.target.value))}
                           onPointerUp={() => saveShare(s)} onKeyUp={() => saveShare(s)} />
                         <output>{Math.round(s.share / totalShare * 100)}%</output>
+                        {/* videos aired for every 1 from the lowest-Share Source */}
+                        <output>{+(s.share / minShare).toFixed(1)} video{s.share === minShare ? '' : 's'}</output>
                       </span>
                     )}
                     <button onClick={() => confirm(`Remove ${s.label}?`) && run(() => api(`sources/${s.id}`, 'DELETE'))}>Remove</button>
