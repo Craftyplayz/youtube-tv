@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
-import { api, go, now, schedule, setIcon, type Lineup, type Slot } from './api.ts';
+import { api, device, go, now, schedule, setIcon, type Lineup, type Slot } from './api.ts';
 import Comments, { Item, type Timed } from './Comments.tsx';
 import Guide from './Guide.tsx';
 import Icon, { type IconName } from './Icon.tsx';
+import ChannelStats from './Stats.tsx';
 
 declare global {
   interface Window {
@@ -29,6 +30,7 @@ const TIMED_FOR = 8; // seconds a Timed comment stays up
 const TIMED_MAX = 3; // on screen at once
 const LEAD_IN = 5; // seconds a jump to a Timed comment lands before its moment
 const WATCH_EVERY = 30_000; // how often a playing Screen adds to its Channel's viewing time; matches the server
+const PLAY_AFTER = 30; // seconds an airing must play before it counts as a view of its video; matches the server
 
 function clock(ms: number) {
   const s = Math.round(Math.abs(ms) / 1000);
@@ -53,13 +55,6 @@ function store(key: string, value: number) {
   } catch { /* storage blocked */ }
 }
 
-// Tells this browser apart in Viewers; randomUUID needs HTTPS, which a home server usually lacks
-let device = Math.random().toString(36).slice(2) + Date.now().toString(36);
-try {
-  device = localStorage.getItem('device') ?? device;
-  localStorage.setItem('device', device);
-} catch { /* storage blocked: a new device each visit */ }
-
 const toggleFullscreen = () =>
   (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
 
@@ -73,6 +68,7 @@ export default function Player({ slug }: { slug: string }) {
   const yt = useRef<any>(null);
   const startedRef = useRef(false);
   const cur = useRef<{ channel: number; slot: Slot | null }>({ channel: 0, slot: null });
+  const played = useRef({ seconds: 0, at: Date.now(), counted: false }); // how long the current airing has played here
   const hideTimer = useRef(0);
   const overControls = useRef(false);
   const rightDown = useRef(false);
@@ -81,6 +77,7 @@ export default function Player({ slug }: { slug: string }) {
   const [lineups, setLineups] = useState<Lineup[] | null>(null);
   const [started, setStarted] = useState(false);
   const [guide, setGuide] = useState(false);
+  const [stats, setStats] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [uploader, setUploader] = useState<{ videoId: string; channelId: string }>();
   const [timed, setTimed] = useState<{ videoId: string; list: Timed[] }>();
@@ -107,6 +104,14 @@ export default function Player({ slug }: { slug: string }) {
       const time = yt.current?.getCurrentTime?.();
       if (time === undefined) return;
       setPos(time);
+      // Counts playing time by the clock, since background tabs run this less often
+      const p = played.current, t = Date.now(), { channel, slot: on } = cur.current;
+      if (yt.current.getPlayerState?.() === window.YT.PlayerState.PLAYING) p.seconds += Math.min(5, (t - p.at) / 1000);
+      p.at = t;
+      if (on && !p.counted && p.seconds >= PLAY_AFTER) {
+        p.counted = true;
+        api(`channels/${channel}/plays`, 'POST', { device, videoId: on.videoId }).catch(() => {});
+      }
       // Near Live, play 5% fast or slow to drift back onto it unnoticed; further off is a deliberate Time-shift and stays at normal speed
       const slot = cur.current.slot;
       const shift = slot ? slot.start + time * 1000 - now() : 0;
@@ -146,6 +151,7 @@ export default function Player({ slug }: { slug: string }) {
 
   function play(channel: number, slot: Slot | null, fromStart: boolean, at = now()) {
     cur.current = { channel, slot };
+    played.current = { seconds: 0, at: Date.now(), counted: false };
     setPos(0);
     showUi(4000);
     if (!slot) {
@@ -363,7 +369,11 @@ export default function Player({ slug }: { slug: string }) {
     });
   }
 
-  const restart = () => yt.current?.seekTo(0, true);
+  // Watching the whole video again counts as another view
+  function restart() {
+    yt.current?.seekTo(0, true);
+    played.current = { seconds: 0, at: Date.now(), counted: false };
+  }
   const goLive = () => live(cur.current.channel);
 
   useEffect(() => {
@@ -377,6 +387,7 @@ export default function Player({ slug }: { slug: string }) {
         if (e.key === 'Escape' || e.key === 'g') setGuide(false);
         return;
       }
+      if (stats) return; // the panel closes itself on Esc
       switch (e.key) {
         case 'ArrowUp': flip(1); break;
         case 'ArrowDown': flip(-1); break;
@@ -527,6 +538,7 @@ export default function Player({ slug }: { slug: string }) {
               <span className="spacer" />
               <Ctl icon="block" label="Exclude: never show this video on this Channel again" onClick={exclude} disabled={!slot} />
               <Ctl icon="guide" label="Guide (g)" onClick={() => setGuide(true)} />
+              <Ctl icon="stats" label="Stats" onClick={() => setStats(true)} />
               <Ctl icon="comments" label="Comments" onClick={() => setShowComments(s => !s)} className={showComments ? 'on' : ''} aria-pressed={showComments} disabled={!slot} />
               <Ctl icon="cc" label="Captions (c)" onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} />
               <Ctl icon="home" label="Channels (Esc)" onClick={() => go('/')} />
@@ -559,6 +571,7 @@ export default function Player({ slug }: { slug: string }) {
           <Icon name="muted" /> Click to unmute
         </button>
       )}
+      {stats && lineups?.[index] && <ChannelStats key={lineups[index].id} channel={lineups[index]} onClose={() => setStats(false)} />}
       {guide && (
         <Guide
           channel={cur.current.channel}
