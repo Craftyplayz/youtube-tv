@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
 import { openDb } from './db.ts';
+import { topVideos, totals, viewerDevices } from './stats.ts';
 import { linkViewers } from './viewers.ts';
 import { queueNewUploads, schedule, type Channel } from './schedule.ts';
 import { comments, refreshChannel, refreshSource, replies, resolveSource, splitSources, timedComments, uploader, type Source } from './youtube.ts';
@@ -13,6 +14,7 @@ const DATA_DIR = process.env.DATA_DIR ?? 'data';
 const WEB = join(import.meta.dirname, '..', 'web', 'dist');
 const HOUR = 3_600_000;
 const WATCH_EVERY = 30; // seconds of playing each Screen reports at a time; matches the Player
+const PLAY_AFTER = 30; // seconds an airing must play on a Screen before it counts as a view; matches the Player
 const ORDERINGS =['shuffle', 'new_first', 'fixed'];
 const TYPES: Record<string, string> = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
@@ -79,6 +81,22 @@ function freeSlug(channelName: string, id: number) {
   if (channels().some(c => c.id !== id && slug(c.name, c.id) === s)) throw new BadRequest(`Another Channel already uses /${s}`);
   return channelName;
 }
+function deviceId(v: unknown) {
+  if (typeof v !== 'string' || !/^[\w-]{8,40}$/.test(v)) throw new BadRequest('Bad device id');
+  return v;
+}
+// A page's ?channel=, or null for every Channel
+const channelParam = (url: URL) => url.searchParams.get('channel') ? Number(url.searchParams.get('channel')) : null;
+const offset = (url: URL) => Number(url.searchParams.get('offset') ?? 0);
+// Viewing time and views in all, then per Channel watched, most watched first
+function breakdown(devices: string[] | null) {
+  return {
+    ...totals(db, devices, null),
+    channels: channels().map(c => ({ id: c.id, name: c.name, ...totals(db, devices, c.id) }))
+      .filter(c => c.seconds || c.views).sort((a, b) => b.seconds - a.seconds || b.views - a.views),
+  };
+}
+
 function num(v: unknown, min: number) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
@@ -176,10 +194,46 @@ const routes: Route[] = [
     }
     return [...viewers.values()].sort((a, b) => b.seconds - a.seconds).map(w => ({
       ...w,
+      // the most recent device stands for the Viewer in the address of their stats page
+      key: Object.entries(w.devices).sort(([, a], [, b]) => b.last_at - a.last_at)[0][0],
       devices: Object.values(w.devices).sort((a, b) => b.last_at - a.last_at),
       channels: Object.entries(w.channels).sort(([, a], [, b]) => b - a).map(([channel, seconds]) => ({ channel, seconds })),
     }));
   })],
+
+  // One Viewer's stats; any of their devices finds them, including the ip:… devices carried over from v0.4.15
+  ['GET', /^\/api\/admin\/viewers\/([^/]+)$/, admin(async ([key]) => {
+    const devices = viewerDevices(db, decodeURIComponent(key));
+    const known = db.prepare(`SELECT device, agent, MAX(last_at) AS last_at FROM views WHERE device IN (${devices.map(() => '?').join(', ')}) GROUP BY device`)
+      .all(...devices) as { device: string; agent: string; last_at: number }[];
+    if (!known.length) throw new BadRequest('No such Viewer');
+    const ips = [...new Set((db.prepare('SELECT device, ip FROM sightings').all() as { device: string; ip: string }[])
+      .filter(s => devices.includes(s.device)).map(s => s.ip))];
+    const where = await locate(ips);
+    return {
+      ...breakdown(devices),
+      devices: known.sort((a, b) => b.last_at - a.last_at).map(({ agent, last_at }) => ({ agent, last_at })),
+      ips: ips.map(ip => ({ ip, location: where.get(ip) ?? 'Unknown' })),
+      last_at: Math.max(...known.map(d => d.last_at)),
+    };
+  })],
+
+  ['GET', /^\/api\/admin\/viewers\/([^/]+)\/videos$/, admin(([key], _, url) =>
+    topVideos(db, viewerDevices(db, decodeURIComponent(key)), channelParam(url), offset(url)))],
+
+  // The whole Household
+  ['GET', /^\/api\/admin\/household$/, admin(() => breakdown(null))],
+
+  ['GET', /^\/api\/admin\/videos$/, admin((_, __, url) => topVideos(db, null, channelParam(url), offset(url)))],
+
+  // A Channel's viewing time and views for everyone and for the Viewer this device belongs to
+  ['GET', /^\/api\/channels\/(\d+)\/stats$/, ([id], _, url) => {
+    const c = channel(id);
+    return { everyone: totals(db, null, c.id), you: totals(db, viewerDevices(db, deviceId(url.searchParams.get('device'))), c.id) };
+  }],
+
+  ['GET', /^\/api\/channels\/(\d+)\/videos$/, ([id], _, url) =>
+    topVideos(db, viewerDevices(db, deviceId(url.searchParams.get('device'))), channel(id).id, offset(url))],
 
   ['POST', /^\/api\/channels\/(\d+)\/tune$/, ([id]) => {
     const c = channel(id);
@@ -190,12 +244,23 @@ const routes: Route[] = [
 
   // A playing Screen calls this every WATCH_EVERY seconds; calls sooner from the same device and Channel don't add more
   ['POST', /^\/api\/channels\/(\d+)\/watch$/, ([id], b, __, req) => {
-    if (typeof b.device !== 'string' || !/^[\w-]{8,40}$/.test(b.device)) throw new BadRequest('Bad device id');
+    deviceId(b.device);
     db.prepare(`
       INSERT INTO views (channel_id, device, agent, seconds, last_at) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT DO UPDATE SET seconds = seconds + excluded.seconds, agent = excluded.agent, last_at = excluded.last_at
       WHERE excluded.last_at - last_at >= ?`).run(
       channel(id).id, b.device, String(req.headers['user-agent'] ?? '').slice(0, 300), WATCH_EVERY, Date.now(), (WATCH_EVERY - 5) * 1000);
+    db.prepare('INSERT OR IGNORE INTO sightings (device, ip) VALUES (?, ?)').run(b.device, clientIp(req));
+    return null;
+  }],
+
+  // A Screen calls this once an airing has played PLAY_AFTER seconds; a second call that soon for the same video doesn't count
+  ['POST', /^\/api\/channels\/(\d+)\/plays$/, ([id], b, __, req) => {
+    if (typeof b.videoId !== 'string' || !/^[\w-]{11}$/.test(b.videoId)) throw new BadRequest('Bad video id');
+    db.prepare(`
+      INSERT INTO plays (channel_id, device, video_id, count, last_at) VALUES (?, ?, ?, 1, ?)
+      ON CONFLICT DO UPDATE SET count = count + 1, last_at = excluded.last_at WHERE excluded.last_at - last_at >= ?`)
+      .run(channel(id).id, deviceId(b.device), b.videoId, Date.now(), (PLAY_AFTER - 5) * 1000);
     db.prepare('INSERT OR IGNORE INTO sightings (device, ip) VALUES (?, ?)').run(b.device, clientIp(req));
     return null;
   }],

@@ -26,6 +26,8 @@ function App() {
   if (path === '/') return <Home />;
   if (path === '/admin') return <Admin page="channels" />;
   if (path === '/admin/viewers') return <Admin page="viewers" />;
+  if (path === '/admin/household') return <Admin page="household" />;
+  if (path.startsWith('/admin/viewers/')) return <Admin key={path} page="viewer" viewer={decodeURIComponent(path.slice('/admin/viewers/'.length))} />;
   return <Player key={path} slug={path.slice(1)} />;
 }
 

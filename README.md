@@ -10,7 +10,9 @@ Live, TV-style Channels made from YouTube videos, for one household. Terms are d
 
 Update: `docker compose pull && docker compose up -d`. Everything is stored in the `youtube-tv-data` volume.
 
-Only Admin (`/admin`: Channels and Viewers) needs the password; watching needs none. Viewers shows viewing time per person and Channel: devices that share an IP, or one device seen on several IPs (say, with a VPN on and off), count as one person. Each IP gets a rough location from ip-api.com. Keep it on your home network.
+Only Admin (`/admin`: Channels and Viewers) needs the password; watching needs none. Viewers shows viewing time per person and Channel: devices that share an IP, or one device seen on several IPs (say, with a VPN on and off), count as one person. Each IP gets a rough location from ip-api.com. Click a Viewer for their stats page (time and views per Channel, and their most-viewed videos on each Channel or across all of them); **Household stats** shows the same for everyone. Keep it on your home network.
+
+A video counts as viewed once it has played on a Screen for 30 seconds; each airing counts again. Every Channel card, and the player's controls, has a **Stats** button: the Channel's viewing time and views for everyone and for you, and your most-viewed videos on it.
 
 ## Controls
 

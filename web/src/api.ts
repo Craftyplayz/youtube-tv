@@ -19,6 +19,10 @@ export type Channel = {
   sources: Source[];
 };
 
+// Viewing time and views, for one Viewer or everyone
+export type Totals = { seconds: number; views: number };
+export type VideoViews = { videoId: string; title: string; by: string; views: number; everyone: number };
+
 export const thumb = (videoId: string) => `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
 // The tab's icon: the YouTube logo, or on a Channel page the avatar of whoever uploaded the video playing
@@ -46,6 +50,18 @@ export function watchedExactly(seconds: number) {
   const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60;
   return [h && `${h} hour${h === 1 ? '' : 's'}`, `${m} minute${m === 1 ? '' : 's'}`].filter(Boolean).join(' ');
 }
+
+// Tells this browser apart in Viewers; randomUUID needs HTTPS, which a home server usually lacks
+export const device = (() => {
+  const fresh = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  try {
+    const d = localStorage.getItem('device') ?? fresh;
+    localStorage.setItem('device', d);
+    return d;
+  } catch {
+    return fresh; // storage blocked: a new device each visit
+  }
+})();
 
 // The Admin password, remembered on this Screen once it's right
 let password = '';

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { go, now, schedule, thumb, watched, watchedExactly, type Lineup } from './api.ts';
+import Icon from './Icon.tsx';
+import ChannelStats from './Stats.tsx';
 
 // Every Channel and what's on it right now
 export default function Home() {
   const [lineups, setLineups] = useState<Lineup[] | null>(null);
   const [query, setQuery] = useState('');
+  const [stats, setStats] = useState<Lineup>();
 
   useEffect(() => {
     document.title = 'Youtube TV';
@@ -44,11 +47,13 @@ export default function Home() {
                     <span className="card-watched" title={watchedExactly(l.watched)}>{watched(l.watched)} watched</span>
                     {s && <progress max={s.end - s.start} value={now() - s.start} />}
                   </a>
+                  <button className="card-stats" title="Stats" aria-label={`${l.name} stats`} onClick={() => setStats(l)}><Icon name="stats" /></button>
                 </li>
               );
             })}
           </ul>
         )}
+      {stats && <ChannelStats channel={stats} onClose={() => setStats(undefined)} />}
     </main>
   );
 }
