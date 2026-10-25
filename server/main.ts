@@ -274,10 +274,10 @@ const routes: Route[] = [
     return {
       now,
       channels: channels().filter(c => !only || c.id === Number(only))
-        .map(c => ({
-          id: c.id, name: c.name, slug: slug(c.name, c.id), slots: schedule(db, c, from, to, now),
-          watched: (db.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM views WHERE channel_id = ?').get(c.id) as { s: number }).s,
-        })),
+        .map(c => {
+          const { seconds, views } = totals(db, null, c.id);
+          return { id: c.id, name: c.name, slug: slug(c.name, c.id), slots: schedule(db, c, from, to, now), watched: seconds, views };
+        }),
     };
   }],
 
