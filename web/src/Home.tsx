@@ -44,7 +44,7 @@ export default function Home() {
                     {s ? <img src={thumb(s.videoId)} alt="" /> : <span className="off">Off air</span>}
                     <span className="card-name"><b>{lineups.indexOf(l) + 1}</b>{l.name}</span>
                     <span className="card-now">{s ? s.title : 'Off air'}</span>
-                    <span className="card-watched" title={watchedExactly(l.watched)}>{watched(l.watched)} watched · {l.views.toLocaleString()} video{l.views === 1 ? '' : 's'} watched</span>
+                    <span className="card-watched" title={watchedExactly(l.watched)}>Watched: {watched(l.watched)} · {l.views.toLocaleString()} video{l.views === 1 ? '' : 's'}</span>
                     {s && <progress max={s.end - s.start} value={now() - s.start} />}
                   </a>
                   <button className="card-stats" title="Stats" aria-label={`${l.name} stats`} onClick={() => setStats(l)}><Icon name="stats" /></button>
