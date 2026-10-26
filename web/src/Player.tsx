@@ -367,10 +367,22 @@ export default function Player({ slug }: { slug: string }) {
   }
 
   // shortcut: loadModule/unloadModule('captions') is undocumented YouTube player API; if YouTube drops it, captions follow YouTube's own default
+  // Turning captions off empties YouTube's track choice, so loading the module again shows nothing until a track is set:
+  // the viewer's language if the video has it, else its first track. The list only exists once the module has loaded.
+  function pickTrack() {
+    const p = yt.current;
+    if (p?.getOption?.('captions', 'track')?.languageCode) return;
+    const list: { languageCode: string }[] = p?.getOption?.('captions', 'tracklist') ?? [];
+    const track = list.find(t => navigator.language.startsWith(t.languageCode)) ?? list[0];
+    if (track) p.setOption('captions', 'track', { languageCode: track.languageCode });
+  }
+
   function applyCaptions(on: boolean) {
     try {
-      if (on) yt.current?.loadModule('captions');
-      else {
+      if (on) {
+        yt.current?.loadModule('captions');
+        pickTrack();
+      } else {
         yt.current?.setOption('captions', 'track', {});
         yt.current?.unloadModule('captions');
       }
@@ -469,9 +481,11 @@ export default function Player({ slug }: { slug: string }) {
           // YouTube brings captions back on its own (new video, resuming from pause), so re-apply the choice whenever playback starts
           if (e.data === PLAYING) applyCaptions(captionsOn.current);
         },
-        // Fires when YouTube loads its captions module by itself; unload it again if the viewer turned captions off
+        // Fires when the captions module loads: unload it again if the viewer turned captions off, else pick a track
         onApiChange: () => {
-          if (!captionsOn.current && yt.current.getOptions?.().includes('captions')) applyCaptions(false);
+          if (!yt.current.getOptions?.().includes('captions')) return;
+          if (captionsOn.current) try { pickTrack(); } catch { /* not ready yet */ }
+          else applyCaptions(false);
         },
         onError: (e: { data: number }) => {
           const s = cur.current.slot;
