@@ -32,6 +32,11 @@ const LEAD_IN = 5; // seconds a jump to a Timed comment lands before its moment
 const WATCH_EVERY = 30_000; // how often a playing Screen adds to its Channel's viewing time; matches the server
 const PLAY_AFTER = 30; // seconds an airing must play before it counts as a view of its video; matches the server
 
+// What every Screen in a Room plays: `time` seconds into `slot` at `at`, moving on from there unless paused
+type RoomState = { channel: number; slot: Slot | null; time: number; paused: boolean; at: number };
+const roomTime = (s: RoomState) => s.paused ? s.time : s.time + (now() - s.at) / 1000;
+const sameSlot = (a: Slot | null, b: Slot | null) => a?.videoId === b?.videoId && a?.start === b?.start;
+
 function clock(ms: number) {
   const s = Math.round(Math.abs(ms) / 1000);
   const h = Math.floor(s / 3600);
@@ -96,6 +101,18 @@ export default function Player({ slug }: { slug: string }) {
   const [captions, setCaptions] = useState(() => load('captions', 0) === 1);
   const captionsOn = useRef(captions);
   captionsOn.current = captions;
+  const [room, setRoom] = useState(() => new URLSearchParams(location.search).get('room'));
+  const [roomInfo, setRoomInfo] = useState<{ hostOnly: boolean; members: number; host: boolean } | null>(null);
+  const [roomPanel, setRoomPanel] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const roomRef = useRef<{ id: string | null; state: RoomState | null; control: boolean }>({ id: room, state: null, control: true });
+  const applying = useRef(false); // playing what the Room sent, which mustn't be sent back
+  const advancing = useRef<Slot | null | undefined>(undefined); // the Slot this Screen just moved on from by itself
+  const seeking = useRef(false);
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+  const locked = !!roomInfo?.hostOnly && !roomInfo.host;
+  const roomLink = room ? `${location.origin}${location.pathname}?room=${room}` : '';
   const target = lineups?.find(l => l.slug === slug);
 
   useEffect(() => {
@@ -112,6 +129,7 @@ export default function Player({ slug }: { slug: string }) {
         p.counted = true;
         api(`channels/${channel}/plays`, 'POST', { device, videoId: on.videoId }).catch(() => {});
       }
+      if (roomRef.current.state) return syncRef.current(time);
       // Near Live, play 5% fast or slow to drift back onto it unnoticed; further off is a deliberate Time-shift and stays at normal speed
       const slot = cur.current.slot;
       const shift = slot ? slot.start + time * 1000 - now() : 0;
@@ -142,6 +160,81 @@ export default function Player({ slug }: { slug: string }) {
 
   useEffect(() => { if (target) start(); }, [lineups]);
 
+  useEffect(() => {
+    if (!room) return;
+    const events = new EventSource(`/api/rooms/${room}/events?device=${device}`);
+    events.onmessage = e => {
+      const m = JSON.parse(e.data);
+      roomRef.current = { id: room, state: m.state, control: !m.hostOnly || m.host };
+      setRoomInfo({ hostOnly: m.hostOnly, members: m.members, host: m.host });
+    };
+    events.onerror = () => {
+      if (events.readyState !== EventSource.CLOSED) return; // the browser reconnects by itself
+      alert('This room has ended');
+      leaveRoom();
+    };
+    return () => events.close();
+  }, [room]);
+
+  // Tells the Room what this Screen now plays; a guest without control isn't heard, and sync puts them back
+  function share(time: number, paused: boolean, after = advancing.current) {
+    const r = roomRef.current;
+    if (!r.id || applying.current || (after === undefined && !r.control)) return;
+    const { channel, slot } = cur.current;
+    r.state = { channel, slot, time, paused, at: now() };
+    api(`rooms/${r.id}/state`, 'POST', { device, state: r.state, after }).catch(() => {});
+  }
+
+  const isPaused = () => yt.current?.getPlayerState?.() === window.YT.PlayerState.PAUSED;
+
+  // Keeps this Screen on the Room's Channel, Slot and moment, nudging the speed for small gaps like Live does
+  function sync(time: number) {
+    const s = roomRef.current.state!, p = yt.current, { channel, slot } = cur.current;
+    if (s.channel !== channel || !sameSlot(s.slot, slot)) {
+      applying.current = true;
+      if (s.channel !== channel) show(s.channel);
+      play(s.channel, s.slot, false, s.slot ? s.slot.start + roomTime(s) * 1000 : undefined);
+      applying.current = false;
+      return;
+    }
+    const want = roomTime(s), state = p.getPlayerState();
+    const { PLAYING, PAUSED } = window.YT.PlayerState;
+    // Still loading, being dragged, or past the end, where ENDED moves everyone on
+    if (!slot || seeking.current || ![PLAYING, PAUSED].includes(state) || want * 1000 >= slot.end - slot.start) return;
+    if (s.paused && state === PLAYING) p.pauseVideo();
+    if (!s.paused && state === PAUSED) p.playVideo();
+    const off = time - want;
+    if (Math.abs(off) > (s.paused ? 0.5 : 2)) p.seekTo(want, true);
+    const rate = !s.paused && Math.abs(off) > 0.3 ? (off < 0 ? 1.05 : 0.95) : 1;
+    if (p.getPlaybackRate?.() !== rate) p.setPlaybackRate(rate);
+  }
+
+  async function startRoom() {
+    const { channel, slot } = cur.current;
+    const state = { channel, slot, time: yt.current?.getCurrentTime?.() ?? 0, paused: isPaused() };
+    const r = await api<{ id: string }>('rooms', 'POST', { device, state }).catch(e => alert(e.message));
+    if (!r) return;
+    roomRef.current = { id: r.id, state: null, control: true };
+    history.replaceState(null, '', `${location.pathname}?room=${r.id}`);
+    setRoom(r.id);
+    setRoomPanel(true);
+    copyLink(`${location.origin}${location.pathname}?room=${r.id}`);
+  }
+
+  // Leaving keeps playing from the same moment, on this Screen only
+  function leaveRoom() {
+    roomRef.current = { id: null, state: null, control: true };
+    history.replaceState(null, '', location.pathname);
+    setRoom(null);
+    setRoomInfo(null);
+    setRoomPanel(false);
+  }
+
+  // The clipboard needs HTTPS (or localhost); without it the link box is there to copy from
+  function copyLink(link = roomLink) {
+    navigator.clipboard?.writeText(link).then(() => setCopied(true), () => {});
+  }
+
   function showUi(ms: number) {
     setUi(true);
     clearTimeout(hideTimer.current);
@@ -154,6 +247,7 @@ export default function Player({ slug }: { slug: string }) {
     played.current = { seconds: 0, at: Date.now(), counted: false };
     setPos(0);
     showUi(4000);
+    share(slot && !fromStart ? (at - slot.start) / 1000 : 0, false);
     if (!slot) {
       setIcon();
       yt.current.stopVideo();
@@ -177,13 +271,18 @@ export default function Player({ slug }: { slug: string }) {
     if (cur.current.channel === channel) play(channel, l?.slots[0] ?? null, false, at);
   }
 
-  function tuneIn(channel: number, slot?: Slot, at?: number) {
+  function show(channel: number) {
     cur.current.channel = channel;
     const l = lineups?.find(x => x.id === channel);
     if (l) {
-      history.replaceState(null, '', '/' + l.slug); // each Channel has its own address
+      // each Channel has its own address
+      history.replaceState(null, '', '/' + l.slug + (roomRef.current.id ? `?room=${roomRef.current.id}` : ''));
       document.title = `${l.name} · Youtube TV`;
     }
+  }
+
+  function tuneIn(channel: number, slot?: Slot, at?: number) {
+    show(channel);
     api(`channels/${channel}/tune`, 'POST').catch(() => {}); // lets this Channel's New uploads get queued
     const t = now();
     // A Slot airing right now joins at the Live moment; past and upcoming ones play from their start
@@ -194,7 +293,7 @@ export default function Player({ slug }: { slug: string }) {
   async function popOut() {
     const { channel, slot } = cur.current;
     const l = lineups?.find(x => x.id === channel);
-    if (!l || window.name === POPOUT) return;
+    if (!l || window.name === POPOUT || roomRef.current.id) return;
     const at = slot && Math.round(slot.start + (yt.current?.getCurrentTime?.() ?? 0) * 1000);
     const url = `/${l.slug}${at ? `?at=${at}` : ''}`;
     // A picture-in-picture window stays on top of everything (Chrome, Edge); other browsers get an ordinary small window
@@ -208,15 +307,18 @@ export default function Player({ slug }: { slug: string }) {
     yt.current?.pauseVideo();
   }
 
-  async function next() {
+  // `auto` when the video ended or failed by itself rather than someone skipping it
+  async function next(auto = false) {
     const { channel, slot } = cur.current;
     if (!slot) return live(channel);
     const [l] = await schedule(slot.start, slot.end + 1, channel);
     if (cur.current.channel !== channel) return;
     const slots = l?.slots ?? [];
     const i = slots.findIndex(s => s.start === slot.start && s.videoId === slot.videoId);
+    advancing.current = auto ? slot : undefined;
     // Never jump mid-video: if the Schedule changed under us, play whatever now covers this video's end, from its start
     play(channel, (i >= 0 ? slots[i + 1] : slots.find(s => s.start <= slot.end && s.end > slot.end)) ?? null, true);
+    advancing.current = undefined;
   }
 
   async function previous() {
@@ -239,12 +341,16 @@ export default function Player({ slug }: { slug: string }) {
     const playing = p.getPlayerState() === window.YT.PlayerState.PLAYING;
     if (playing) p.pauseVideo();
     else p.playVideo();
+    share(p.getCurrentTime(), playing);
     setFlash({ icon: playing ? 'pause' : 'play', key: Date.now() });
   }
 
   function seekBy(seconds: number) {
     const p = yt.current;
-    if (p?.getCurrentTime) p.seekTo(Math.max(0, p.getCurrentTime() + seconds), true);
+    if (!p?.getCurrentTime) return;
+    const t = Math.max(0, p.getCurrentTime() + seconds);
+    p.seekTo(t, true);
+    share(t, isPaused());
   }
 
   // Seeking anywhere in the video just changes this Screen's Time-shift
@@ -256,6 +362,8 @@ export default function Player({ slug }: { slug: string }) {
     const t = (Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * (slot.end - slot.start)) / 1000;
     yt.current?.seekTo(t, final);
     setPos(t);
+    seeking.current = !final;
+    if (final) share(t, isPaused());
   }
 
   // shortcut: loadModule/unloadModule('captions') is undocumented YouTube player API; if YouTube drops it, captions follow YouTube's own default
@@ -282,7 +390,11 @@ export default function Player({ slug }: { slug: string }) {
     store('timedComments', on ? 1 : 0);
   }
 
-  const jumpTo = (second: number) => yt.current?.seekTo(Math.max(0, second - LEAD_IN), true);
+  function jumpTo(second: number) {
+    const t = Math.max(0, second - LEAD_IN);
+    yt.current?.seekTo(t, true);
+    share(t, isPaused());
+  }
 
   function changeVolume(v: number) {
     const level = Math.max(0, Math.min(100, Math.round(v)));
@@ -331,7 +443,7 @@ export default function Player({ slug }: { slug: string }) {
     const { channel, slot } = cur.current;
     const name = lineups?.find(l => l.id === channel)?.name;
     if (!slot || !confirm(`Never show “${slot.title}” on ${name} again?`)) return;
-    await api(`channels/${channel}/exclusions`, 'POST', { videoId: slot.videoId }).then(next, e => alert(e.message));
+    await api(`channels/${channel}/exclusions`, 'POST', { videoId: slot.videoId }).then(() => next(), e => alert(e.message));
   }
 
   async function start() {
@@ -346,12 +458,13 @@ export default function Player({ slug }: { slug: string }) {
       events: {
         onReady: () => {
           yt.current.setVolume(vol.current);
-          tuneIn(target.id, undefined, Number(new URLSearchParams(location.search).get('at')) || undefined);
+          // Joining a Room plays whatever the Room plays, once it says
+          if (!roomRef.current.id) tuneIn(target.id, undefined, Number(new URLSearchParams(location.search).get('at')) || undefined);
           if (!interacted) setTimeout(checkAutoplay, 2000);
         },
         onStateChange: (e: { data: number }) => {
           const { ENDED, PLAYING, PAUSED } = window.YT.PlayerState;
-          if (e.data === ENDED) next();
+          if (e.data === ENDED) next(true);
           if (e.data === PLAYING || e.data === PAUSED) setPaused(e.data === PAUSED);
           // YouTube brings captions back on its own (new video, resuming from pause), so re-apply the choice whenever playback starts
           if (e.data === PLAYING) applyCaptions(captionsOn.current);
@@ -363,7 +476,7 @@ export default function Player({ slug }: { slug: string }) {
         onError: (e: { data: number }) => {
           const s = cur.current.slot;
           if (s && UNPLAYABLE.includes(e.data)) api(`videos/${s.videoId}/broken`, 'POST').catch(() => {});
-          next();
+          next(true);
         },
       },
     });
@@ -373,6 +486,7 @@ export default function Player({ slug }: { slug: string }) {
   function restart() {
     yt.current?.seekTo(0, true);
     played.current = { seconds: 0, at: Date.now(), counted: false };
+    share(0, isPaused());
   }
   const goLive = () => live(cur.current.channel);
 
@@ -388,6 +502,7 @@ export default function Player({ slug }: { slug: string }) {
         return;
       }
       if (stats) return; // the panel closes itself on Esc
+      if (locked && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'N', 'P', ' ', 'k', 'r', 'l'].includes(e.key)) return;
       switch (e.key) {
         case 'ArrowUp': flip(1); break;
         case 'ArrowDown': flip(-1); break;
@@ -467,7 +582,7 @@ export default function Player({ slug }: { slug: string }) {
               swallowClick.current = false;
               return;
             }
-            if (e.detail === 1) clickTimer.current = window.setTimeout(togglePause, 300);
+            if (e.detail === 1 && !locked) clickTimer.current = window.setTimeout(togglePause, 300);
           }}
           onDoubleClick={toggleFullscreen}
         />
@@ -501,7 +616,7 @@ export default function Player({ slug }: { slug: string }) {
           >
             {slot && (
               <div
-                className="progress" ref={bar}
+                className={`progress ${locked ? 'locked' : ''}`} ref={bar}
                 onPointerDown={e => {
                   if (e.button !== 0) return;
                   e.currentTarget.setPointerCapture(e.pointerId);
@@ -515,12 +630,12 @@ export default function Player({ slug }: { slug: string }) {
               </div>
             )}
             <div className="controls">
-              <Ctl icon="previous" label="Previous video (Shift+P)" onClick={previous} disabled={!slot} />
-              <Ctl icon={paused ? 'play' : 'pause'} label={paused ? 'Play (k)' : 'Pause (k)'} onClick={togglePause} />
-              <Ctl icon="next" label="Skip to next video (Shift+N)" onClick={next} disabled={!slot} />
-              <Ctl icon="replay" label="Restart (r)" onClick={restart} />
-              <Ctl icon="down" label="Channel down (↓)" onClick={() => flip(-1)} />
-              <Ctl icon="up" label="Channel up (↑)" onClick={() => flip(1)} />
+              <Ctl icon="previous" label="Previous video (Shift+P)" onClick={previous} disabled={!slot || locked} />
+              <Ctl icon={paused ? 'play' : 'pause'} label={paused ? 'Play (k)' : 'Pause (k)'} onClick={togglePause} disabled={locked} />
+              <Ctl icon="next" label="Skip to next video (Shift+N)" onClick={() => next()} disabled={!slot || locked} />
+              <Ctl icon="replay" label="Restart (r)" onClick={restart} disabled={locked} />
+              <Ctl icon="down" label="Channel down (↓)" onClick={() => flip(-1)} disabled={locked} />
+              <Ctl icon="up" label="Channel up (↑)" onClick={() => flip(1)} disabled={locked} />
               <div className="volume">
                 <Ctl icon={muted || !volume ? 'muted' : 'volume'} label={muted ? 'Unmute (m)' : 'Mute (m)'} onClick={toggleMute} />
                 <input
@@ -531,18 +646,21 @@ export default function Player({ slug }: { slug: string }) {
               </div>
               {slot && <span className="time">{clock(pos * 1000)} / {clock(duration * 1000)}</span>}
               {slot && (
-                <button className={`live ${isLive ? 'at-live' : ''}`} onClick={goLive} title={isLive ? 'Watching Live' : 'Go live (l)'}>
+                <button className={`live ${isLive ? 'at-live' : ''}`} onClick={goLive} disabled={locked} title={isLive ? 'Watching Live' : 'Go live (l)'}>
                   <i />{isLive ? 'LIVE' : `${shift < 0 ? '−' : '+'}${clock(shift)}`}
                 </button>
               )}
               <span className="spacer" />
-              <Ctl icon="block" label="Exclude: never show this video on this Channel again" onClick={exclude} disabled={!slot} />
+              <Ctl icon="block" label="Exclude: never show this video on this Channel again" onClick={exclude} disabled={!slot || locked} />
               <Ctl icon="guide" label="Guide (g)" onClick={() => setGuide(true)} />
               <Ctl icon="stats" label="Stats" onClick={() => setStats(true)} />
               <Ctl icon="comments" label="Comments" onClick={() => setShowComments(s => !s)} className={showComments ? 'on' : ''} aria-pressed={showComments} disabled={!slot} />
               <Ctl icon="cc" label="Captions (c)" onClick={toggleCaptions} className={captions ? 'on' : ''} aria-pressed={captions} />
+              <Ctl icon="room" label={room ? 'Room' : 'Start a room to watch together'} className={room ? 'on' : ''}
+                onClick={() => (room ? setRoomPanel(p => !p) : startRoom())} />
               <Ctl icon="home" label="Channels (Esc)" onClick={() => go('/')} />
-              {window.name !== POPOUT && <Ctl icon="popout" label="Pop out into a small window that stays on top (i)" onClick={popOut} />}
+              {/* Popping out pauses this window, which in a Room would pause everyone */}
+              {window.name !== POPOUT && !room && <Ctl icon="popout" label="Pop out into a small window that stays on top (i)" onClick={popOut} />}
               <Ctl icon={fullscreen ? 'fullscreenExit' : 'fullscreen'} label={fullscreen ? 'Exit full screen (f)' : 'Full screen (f)'} onClick={toggleFullscreen} />
             </div>
           </div>
@@ -571,7 +689,27 @@ export default function Player({ slug }: { slug: string }) {
           <Icon name="muted" /> Click to unmute
         </button>
       )}
-      {stats && lineups?.[index] && <ChannelStats key={lineups[index].id} channel={lineups[index]} onClose={() => setStats(false)} />}
+      {roomPanel && room && (
+        <div className="room-panel">
+          <div className="room-head">
+            <b>Room · {roomInfo?.members ?? 1} watching</b>
+            <button title="Close" aria-label="Close" onClick={() => setRoomPanel(false)}><Icon name="close" /></button>
+          </div>
+          <div className="room-link">
+            <input readOnly value={roomLink} aria-label="Room link" onFocus={e => e.target.select()} />
+            {navigator.clipboard && <button onClick={() => copyLink()}>{copied ? 'Copied' : 'Copy link'}</button>}
+          </div>
+          {roomInfo?.host ? (
+            <label>
+              <input type="checkbox" checked={roomInfo.hostOnly}
+                onChange={e => api(`rooms/${room}`, 'PUT', { device, hostOnly: e.target.checked }).catch(err => alert(err.message))} />
+              Only I control playback
+            </label>
+          ) : <small>{roomInfo?.hostOnly ? 'Only the host controls playback' : 'Everyone controls playback'}</small>}
+          <button onClick={leaveRoom}>Leave room</button>
+        </div>
+      )}
+      {stats && lineups?.[index] &&<ChannelStats key={lineups[index].id} channel={lineups[index]} onClose={() => setStats(false)} />}
       {guide && (
         <Guide
           channel={cur.current.channel}

@@ -61,6 +61,10 @@ _Avoid_: User, account, profile
 One TV or display running the app, watching one Channel at a time.
 _Avoid_: Device, client, player
 
+**Room**:
+A group of Screens, joined by a link, that play the same Channel at the same moment: pausing, seeking, skipping or changing Channel on one does it on all. Whoever started it is the host and can make playback theirs alone; by default everyone controls it. Volume, captions and the panels stay per Screen.
+_Avoid_: Party, session, watch together
+
 **Tune in**:
 Switching a Screen to a Channel; it always lands at Live.
 _Avoid_: Open, select, switch to

@@ -6,7 +6,8 @@ import { extname, join } from 'node:path';
 import { openDb } from './db.ts';
 import { topVideos, totals, viewerDevices } from './stats.ts';
 import { linkViewers } from './viewers.ts';
-import { queueNewUploads, schedule, type Channel } from './schedule.ts';
+import { broadcast, createRoom, rooms, update, type Room, type RoomState } from './rooms.ts';
+import { queueNewUploads, schedule, type Channel, type Slot } from './schedule.ts';
 import { comments, refreshChannel, refreshSource, replies, resolveSource, splitSources, timedComments, uploader, type Source } from './youtube.ts';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -88,6 +89,21 @@ function deviceId(v: unknown) {
 // A page's ?channel=, or null for every Channel
 const channelParam = (url: URL) => url.searchParams.get('channel') ? Number(url.searchParams.get('channel')) : null;
 const offset = (url: URL) => Number(url.searchParams.get('offset') ?? 0);
+function room(id: string) {
+  const r = rooms.get(id);
+  if (!r) throw new BadRequest('This room has ended');
+  return r;
+}
+function roomSlot(v: any): Slot | null {
+  if (v === null) return null;
+  if (typeof v?.videoId !== 'string' || !/^[\w-]{11}$/.test(v.videoId) || !Number.isFinite(v.start) || !Number.isFinite(v.end))
+    throw new BadRequest('Bad Slot');
+  return { start: v.start, end: v.end, videoId: v.videoId, title: String(v.title ?? '').slice(0, 300), by: String(v.by ?? '').slice(0, 300) };
+}
+function roomState(v: any): RoomState {
+  if (!Number.isFinite(v?.time) || v.time < 0) throw new BadRequest('Bad time');
+  return { channel: channel(String(v.channel)).id, slot: roomSlot(v.slot), time: v.time, paused: !!v.paused, at: Date.now() };
+}
 // Viewing time and views in all, then per Channel watched, most watched first
 function breakdown(devices: string[] | null) {
   return {
@@ -288,6 +304,25 @@ const routes: Route[] = [
     return null;
   }],
 
+  ['POST', /^\/api\/rooms$/, (_, b) => ({ id: createRoom(deviceId(b.device), roomState(b.state)) })],
+
+  // Someone pressed a control, or (with `after`) their video ended and they moved on to the next Slot
+  ['POST', /^\/api\/rooms\/(\w+)\/state$/, ([id], b) => {
+    const r = room(id);
+    const done = update(r, deviceId(b.device), roomState(b.state), b.after === undefined ? undefined : roomSlot(b.after));
+    if (done === null) throw new Unauthorized('Only the host controls this room');
+    if (done) broadcast(r);
+    return null;
+  }],
+
+  ['PUT', /^\/api\/rooms\/(\w+)$/, ([id], b) => {
+    const r = room(id);
+    if (deviceId(b.device) !== r.host) throw new Unauthorized('Only the host can change who controls the room');
+    r.hostOnly = !!b.hostOnly;
+    broadcast(r);
+    return null;
+  }],
+
   ['GET', /^\/api\/videos\/([\w-]{11})\/uploader$/, ([id]) => uploader(id)],
 
   ['GET', /^\/api\/videos\/([\w-]{11})\/comments$/, ([id], _, url) =>
@@ -320,6 +355,22 @@ function send(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(data));
 }
 
+// Each Screen in a Room keeps this stream open and hears every change; a Room nobody has open for 10 minutes ends
+function joinRoom(id: string, device: string, res: ServerResponse) {
+  const r: Room = room(id);
+  // X-Accel-Buffering stops nginx holding the stream back
+  res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'x-accel-buffering': 'no' });
+  r.screens.set(res, device);
+  broadcast(r);
+  const keepAlive = setInterval(() => res.write(':\n\n'), 25_000);
+  res.on('close', () => {
+    clearInterval(keepAlive);
+    r.screens.delete(res);
+    broadcast(r);
+    setTimeout(() => { if (!r.screens.size && rooms.get(id) === r) rooms.delete(id); }, 10 * 60_000);
+  });
+}
+
 async function serveWeb(path: string, res: ServerResponse) {
   let file = join(WEB, path);
   let data = file.startsWith(WEB) ? await readFile(file).catch(() => null) : null;
@@ -331,6 +382,8 @@ createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   try {
     if (!url.pathname.startsWith('/api/')) return await serveWeb(url.pathname, res);
+    const events = /^\/api\/rooms\/(\w+)\/events$/.exec(url.pathname);
+    if (events) return joinRoom(events[1], deviceId(url.searchParams.get('device')), res);
     const route = routes.find(([method, path]) => method === req.method && path.test(url.pathname));
     if (!route) return send(res, 404, { error: 'Not found' });
     send(res, 200, await route[2](route[1].exec(url.pathname)!.slice(1), await readBody(req), url, req));

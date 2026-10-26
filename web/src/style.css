@@ -245,3 +245,16 @@ textarea { width: 100%; resize: vertical; }
 .picker button { display: grid; text-align: left; }
 .picker button.on { border-color: var(--accent); }
 .picker small { color: var(--dim); }
+
+/* Room: top right, clear of the Channel name */
+.room-panel {
+  position: absolute; top: 18px; right: 24px; display: grid; gap: 10px; width: min(360px, calc(100% - 32px)); padding: 12px 14px;
+  border-radius: 12px; background: rgb(15 15 15 / .92);
+}
+.room-head { display: flex; justify-content: space-between; align-items: center; }
+.room-head button { display: grid; padding: 4px; background: none; border: 0; }
+.room-link { display: flex; gap: 6px; }
+.room-link input { flex: 1; min-width: 0; }
+.room-panel label { display: flex; gap: 8px; align-items: center; }
+.room-panel small { color: var(--dim); }
+.progress.locked { pointer-events: none; }
