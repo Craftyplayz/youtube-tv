@@ -87,11 +87,10 @@ type Props = {
   timed?: Timed[]; // undefined while loading
   overlay: boolean; // Timed comments pop up over the video
   onOverlay: (on: boolean) => void;
-  onJump: (second: number) => void;
   onClose: () => void;
 };
 
-export default function Comments({ videoId, timed, overlay, onOverlay, onJump, onClose }: Props) {
+export default function Comments({ videoId, timed, overlay, onOverlay, onClose }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>('relevance');
   const header = (
     // No focus left on the buttons, or Space would press them again instead of pausing
@@ -115,7 +114,7 @@ export default function Comments({ videoId, timed, overlay, onOverlay, onJump, o
       </label>
       {!timed && <p className="dim">Loading…</p>}
       {timed && !timed.length && <p>No top comments point at a moment in this video.</p>}
-      <ul>{timed?.map(m => <Item key={`${m.comment.id}@${m.second}`} c={m.comment} className="comment jump" title="Jump to this moment" onClick={() => onJump(m.second)} />)}</ul>
+      <ul>{timed?.map(m => <Item key={`${m.comment.id}@${m.second}`} c={m.comment} />)}</ul>
     </aside>
   );
   // Keyed by sort, so switching starts the list over at the top

@@ -28,7 +28,6 @@ const LIVE_WITHIN = 15_000;
 const DRIFT_WITHIN = 30_000;
 const TIMED_FOR = 8; // seconds a Timed comment stays up
 const TIMED_MAX = 3; // on screen at once
-const LEAD_IN = 5; // seconds a jump to a Timed comment lands before its moment
 const WATCH_EVERY = 30_000; // how often a playing Screen adds to its Channel's viewing time; matches the server
 const PLAY_AFTER = 30; // seconds an airing must play before it counts as a view of its video; matches the server
 
@@ -86,6 +85,7 @@ export default function Player({ slug }: { slug: string }) {
   const [showComments, setShowComments] = useState(false);
   const [uploader, setUploader] = useState<{ videoId: string; channelId: string }>();
   const [timed, setTimed] = useState<{ videoId: string; list: Timed[] }>();
+  const [openTimed, setOpenTimed] = useState<string>();
   const [overlay, setOverlay] = useState(() => load('timedComments', 1) === 1);
   const [pos, setPos] = useState(0); // seconds into the current video
   const [ui, setUi] = useState(true);
@@ -402,10 +402,10 @@ export default function Player({ slug }: { slug: string }) {
     store('timedComments', on ? 1 : 0);
   }
 
-  function jumpTo(second: number) {
-    const t = Math.max(0, second - LEAD_IN);
-    yt.current?.seekTo(t, true);
-    share(t, isPaused());
+  // Only a popup whose text is cut off opens; clicking an open one closes it
+  function toggleTimed(key: string, text: HTMLElement) {
+    if (key === openTimed) setOpenTimed(undefined);
+    else if (text.scrollHeight > text.clientHeight) setOpenTimed(key);
   }
 
   function changeVolume(v: number) {
@@ -576,7 +576,10 @@ export default function Player({ slug }: { slug: string }) {
   const shift = slot ? slot.start + pos * 1000 - now() : 0;
   const isLive = Math.abs(shift) < LIVE_WITHIN;
   const timedList = slot && timed?.videoId === slot.videoId ? timed.list : undefined;
-  const popping = overlay && timedList ? timedList.filter(m => m.second <= pos && pos < m.second + TIMED_FOR).slice(-TIMED_MAX) : [];
+  const timedKey = (m: Timed) => `${m.comment.id}@${m.second}`;
+  // An opened popup stays up until clicked again, so a long comment can be read to the end
+  const popping = overlay && timedList
+    ? timedList.filter(m => (m.second <= pos && pos < m.second + TIMED_FOR) || timedKey(m) === openTimed).slice(-TIMED_MAX) : [];
   const pct = (seconds: number) => `${duration ? (Math.max(0, Math.min(duration, seconds)) / duration) * 100 : 0}%`;
   return (
     <div className={`tv ${background ? 'background' : ''}`} onMouseMove={() => showUi(1500)}>
@@ -683,7 +686,8 @@ export default function Player({ slug }: { slug: string }) {
       {popping.length > 0 && (
         <ul className="timed">
           {popping.map(m => (
-            <Item key={`${m.comment.id}@${m.second}`} c={m.comment} className="comment jump" title="Jump to this moment" onClick={() => jumpTo(m.second)}>
+            <Item key={timedKey(m)} c={m.comment} className={`comment ${timedKey(m) === openTimed ? 'open' : ''}`}
+              onClick={e => toggleTimed(timedKey(m), e.currentTarget.querySelector('p')!)}>
               <button className="hide-timed" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); changeOverlay(false); }}
                 title="Keep Timed comments in the Comments panel only">Hide popups</button>
             </Item>
@@ -693,7 +697,7 @@ export default function Player({ slug }: { slug: string }) {
       {/* keyed by video, so each new video starts the panel over at its own first page */}
       {showComments && slot && (
         <Comments key={slot.videoId} videoId={slot.videoId} timed={timedList} overlay={overlay} onOverlay={changeOverlay}
-          onJump={jumpTo} onClose={() => setShowComments(false)} />
+          onClose={() => setShowComments(false)} />
       )}
       {volumeOsd && (
         <div key={volumeOsd.key} className="volume-osd" onAnimationEnd={() => setVolumeOsd(null)}>{volumeOsd.level}</div>

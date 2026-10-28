@@ -111,16 +111,16 @@ button:disabled { opacity: .4; cursor: default; }
 .replies-toggle:hover { background: rgb(62 166 255 / .2); }
 .overlay-toggle { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: .9rem; cursor: pointer; }
 .overlay-toggle input { accent-color: var(--accent); }
-.comment.jump { cursor: pointer; }
-.comments .comment.jump:hover { margin: -6px; padding: 6px; border-radius: 8px; background: rgb(255 255 255 / .06); }
 /* Timed comments rise above the controls while their moment plays */
 .timed {
   position: absolute; left: 24px; bottom: 88px; display: grid; gap: 8px; width: min(380px, calc(100% - 48px));
   margin: 0; padding: 0; list-style: none;
 }
-.timed .comment { position: relative; padding: 10px 12px; border-radius: 12px; background: rgb(15 15 15 / .85); animation: rise .3s ease-out; }
+.timed .comment { position: relative; padding: 10px 12px; cursor: pointer; border-radius: 12px; background: rgb(15 15 15 / .85); animation: rise .3s ease-out; }
 .timed .comment:hover { background: rgb(40 40 40 / .92); }
-.timed .comment p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.timed .comment:not(.open) p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+/* A very long comment scrolls rather than growing past the top of the screen */
+.timed .comment.open p { max-height: 50vh; overflow-y: auto; }
 .timed small { color: var(--dim); }
 .hide-timed {
   position: absolute; top: 6px; right: 6px; padding: 2px 8px; border: 0; border-radius: 10px;
