@@ -1,12 +1,12 @@
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
-export type Lineup = { id: number; name: string; slug: string; slots: Slot[]; watched: number; views: number };
+export type Lineup = { id: number; name: string; slug: string; group?: string; slots: Slot[]; watched: number; views: number };
 export type Source = { id: number; kind: 'youtube_channel' | 'playlist' | 'list'; label: string; share: number; videos: number };
 export type Channel = {
   id: number;
   name: string;
   slug: string;
   position: number;
-  ordering: 'shuffle' | 'new_first' | 'fixed';
+  ordering: 'shuffle' | 'new_first' | 'fixed' | 'release';
   recent_ratio: number;
   recent_days: number;
   skip_shorts: number;
@@ -16,6 +16,7 @@ export type Channel = {
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;
+  parent_id: number | null;
   sources: Source[];
 };
 

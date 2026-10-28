@@ -1,4 +1,4 @@
-import type { Db } from './db.ts';
+import { WITHIN, type Db } from './db.ts';
 
 export type Source = { id: number; channel_id: number; kind: 'youtube_channel' | 'playlist' | 'list'; ref: string; label: string; added_at: number };
 
@@ -92,7 +92,7 @@ export async function refreshSource(db: Db, src: Source) {
 }
 
 export async function refreshChannel(db: Db, channelId: number, olderThanMs: number) {
-  const due = db.prepare('SELECT * FROM sources WHERE channel_id = ? AND refreshed_at < ?').all(channelId, Date.now() - olderThanMs) as Source[];
+  const due = db.prepare(`${WITHIN} SELECT * FROM sources WHERE channel_id IN within AND refreshed_at < ?`).all(channelId, Date.now() - olderThanMs) as Source[];
   for (const s of due) await refreshSource(db, s).catch(e => console.error(`Refreshing ${s.label} failed: ${e.message}`));
 }
 

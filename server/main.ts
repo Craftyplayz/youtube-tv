@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join } from 'node:path';
-import { openDb } from './db.ts';
+import { openDb, WITHIN } from './db.ts';
 import { topVideos, totals, viewerDevices } from './stats.ts';
 import { linkViewers } from './viewers.ts';
 import { broadcast, createRoom, rooms, update, type Room, type RoomState } from './rooms.ts';
@@ -16,7 +16,7 @@ const WEB = join(import.meta.dirname, '..', 'web', 'dist');
 const HOUR = 3_600_000;
 const WATCH_EVERY = 30; // seconds of playing each Screen reports at a time; matches the Player
 const PLAY_AFTER = 30; // seconds an airing must play on a Screen before it counts as a view; matches the Player
-const ORDERINGS =['shuffle', 'new_first', 'fixed'];
+const ORDERINGS = ['shuffle', 'new_first', 'fixed', 'release'];
 const TYPES: Record<string, string> = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
 };
@@ -137,11 +137,15 @@ const routes: Route[] = [
   ['PUT', /^\/api\/channels\/(\d+)$/, admin(([id], b) => {
     const c = { ...channel(id), ...b };
     if (!ORDERINGS.includes(c.ordering)) throw new BadRequest('Unknown Ordering');
+    const parent = num(c.parent_id, 1);
+    if (parent !== null && db.prepare(`${WITHIN} SELECT 1 FROM within WHERE id = ?`).get(Number(id), channel(String(parent)).id))
+      throw new BadRequest("A Channel can't go in its own Group");
     db.prepare(`
       UPDATE channels SET name = ?, position = ?, ordering = ?, recent_ratio = ?, recent_days = ?,
-        skip_shorts = ?, skip_live = ?, by_share = ?, by_age = ?, max_minutes = ?, max_age_days = ?, blocked_words = ? WHERE id = ?`).run(
+        skip_shorts = ?, skip_live = ?, by_share = ?, by_age = ?, max_minutes = ?, max_age_days = ?, blocked_words = ?, parent_id = ? WHERE id = ?`).run(
       freeSlug(name(c.name), Number(id)), num(c.position, 0) ?? 0, c.ordering, num(c.recent_ratio, 0) ?? 3, num(c.recent_days, 1) ?? 180,
-      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, c.by_share ? 1 : 0, c.by_age ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000), Number(id));
+      c.skip_shorts ? 1 : 0, c.skip_live ? 1 : 0, c.by_share ? 1 : 0, c.by_age ? 1 : 0, num(c.max_minutes, 1), num(c.max_age_days, 1), String(c.blocked_words ?? '').slice(0, 1000),
+      parent, Number(id));
     return null;
   })],
 
@@ -174,8 +178,14 @@ const routes: Route[] = [
     return { failed: failed.join('\n'), error: errors.join('\n') };
   })],
 
+  // Sets a Source's Share, or moves it to the end of another Channel's Sources, e.g. to split a Channel into its Group
   ['PUT', /^\/api\/sources\/(\d+)$/, admin(([id], b) => {
-    db.prepare('UPDATE sources SET share = ? WHERE id = ?').run(Math.min(100, num(b.share, 1) ?? 50), Number(id));
+    if (b.share !== undefined) db.prepare('UPDATE sources SET share = ? WHERE id = ?').run(Math.min(100, num(b.share, 1) ?? 50), Number(id));
+    if (b.channel !== undefined) {
+      const c = channel(String(b.channel));
+      db.prepare('UPDATE sources SET channel_id = ?, position = (SELECT COALESCE(MAX(position), 0) + 1 FROM sources WHERE channel_id = ?) WHERE id = ?')
+        .run(c.id, c.id, Number(id));
+    }
     return null;
   })],
 
@@ -292,7 +302,8 @@ const routes: Route[] = [
       channels: channels().filter(c => !only || c.id === Number(only))
         .map(c => {
           const { seconds, views } = totals(db, null, c.id);
-          return { id: c.id, name: c.name, slug: slug(c.name, c.id), slots: schedule(db, c, from, to, now), watched: seconds, views };
+          const group = c.parent_id ? channel(String(c.parent_id)).name : undefined;
+          return { id: c.id, name: c.name, slug: slug(c.name, c.id), group, slots: schedule(db, c, from, to, now), watched: seconds, views };
         }),
     };
   }],

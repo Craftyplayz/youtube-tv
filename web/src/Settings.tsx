@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type Channel, type Source } from './api.ts';
 import { rebalance } from './shares.ts';
 
-const ORDERINGS = { shuffle: 'Shuffle', new_first: 'New uploads first', fixed: 'Fixed order' };
+const ORDERINGS = { shuffle: 'Shuffle', new_first: 'New uploads first', fixed: 'Fixed order', release: 'Release order' };
 const KINDS = { youtube_channel: 'YouTube channel', playlist: 'Playlist', list: 'Hand-picked list' };
 
 export default function Settings() {
@@ -62,6 +62,8 @@ export default function Settings() {
         const isOpen = open.includes(c.id);
         const totalShare = c.sources.reduce((a, s) => a + s.share, 0);
         const minShare = Math.min(...c.sources.map(s => s.share));
+        const parent = channels.find(p => p.id === c.parent_id);
+        const inGroup = channels.filter(x => x.parent_id === c.id).length;
         return (
           <section key={c.id} className="channel">
             <div className="row">
@@ -69,7 +71,8 @@ export default function Settings() {
                 <span className="caret">{isOpen ? '▾' : '▸'}</span>
                 <span className="number">{i + 1}</span>
                 <b>{c.name}</b>
-                <small>{c.sources.length} Source{c.sources.length === 1 ? '' : 's'}</small>
+                <small>{c.sources.length} Source{c.sources.length === 1 ? '' : 's'}{!!inGroup && ` · ${inGroup} Channel${inGroup === 1 ? '' : 's'} in its Group`}</small>
+                {parent && <small>in {parent.name}</small>}
               </button>
               <a href={'/' + c.slug}>/{c.slug}</a>
               <button type="button" disabled={i === 0} onClick={() => swap(c, channels[i - 1])} aria-label="Move up">↑</button>
@@ -90,8 +93,14 @@ export default function Settings() {
                     {Object.entries(ORDERINGS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                   </select>
                 </label>
-                <label>Mix Sources by the Share set on each below, instead of every video equally often (not in Fixed order) <input name="by_share" type="checkbox" defaultChecked={!!c.by_share} /></label>
-                <label>Mix recent videos and Back catalog by the two settings below, instead of every age equally often (not in Fixed order) <input name="by_age" type="checkbox" defaultChecked={!!c.by_age} /></label>
+                <label>In the Group of (its videos also air there)
+                  <select name="parent_id" defaultValue={c.parent_id ?? ''}>
+                    <option value="">No Group</option>
+                    {channels.filter(x => x.id !== c.id).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  </select>
+                </label>
+                <label>Mix Sources by the Share set on each below, instead of every video equally often (not in Fixed or Release order) <input name="by_share" type="checkbox" defaultChecked={!!c.by_share} /></label>
+                <label>Mix recent videos and Back catalog by the two settings below, instead of every age equally often (not in Fixed or Release order) <input name="by_age" type="checkbox" defaultChecked={!!c.by_age} /></label>
                 <label>Recent videos per Back catalog video <input name="recent_ratio" type="number" min={0} defaultValue={c.recent_ratio} /></label>
                 <label>Recent means newer than (days) <input name="recent_days" type="number" min={1} defaultValue={c.recent_days} /></label>
                 <label>Skip Shorts <input name="skip_shorts" type="checkbox" defaultChecked={!!c.skip_shorts} /></label>
@@ -117,6 +126,11 @@ export default function Settings() {
                         <output>{+(s.share / minShare).toFixed(1)} video{s.share === minShare ? '' : 's'}</output>
                       </span>
                     )}
+                    <select value="" aria-label={`Move ${s.label} to another Channel`}
+                      onChange={e => run(() => api(`sources/${s.id}`, 'PUT', { channel: Number(e.target.value) }))}>
+                      <option value="">Move to…</option>
+                      {channels.filter(x => x.id !== c.id).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select>
                     <button onClick={() => confirm(`Remove ${s.label}?`) && run(() => api(`sources/${s.id}`, 'DELETE'))}>Remove</button>
                   </li>
                 ))}

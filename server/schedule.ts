@@ -1,4 +1,4 @@
-import type { Db } from './db.ts';
+import { WITHIN, type Db } from './db.ts';
 
 const DAY = 86_400_000;
 
@@ -6,7 +6,7 @@ export type Channel = {
   id: number;
   name: string;
   position: number;
-  ordering: 'shuffle' | 'new_first' | 'fixed';
+  ordering: 'shuffle' | 'new_first' | 'fixed' | 'release';
   recent_ratio: number;
   recent_days: number;
   skip_shorts: number;
@@ -16,22 +16,24 @@ export type Channel = {
   max_minutes: number | null;
   max_age_days: number | null;
   blocked_words: string;
+  parent_id: number | null;
 };
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
 
 type Video = { id: string; title: string; channel_title: string; published_at: number; duration: number; is_short: number; added_at: number; source_id: number; share: number };
 type State = { n: number; counts: Map<string, number>; queue: string[]; last: string | null };
 
-// Videos the Channel's Filters allow, in Fixed order sequence
+// Videos the Channel's Filters allow from its own Sources and its Group's, in Fixed order (or Release order) sequence
 function pool(db: Db, ch: Channel, now: number): Video[] {
-  const rows = db.prepare(`
+  const rows = db.prepare(`${WITHIN}
     SELECT v.id, v.title, v.channel_title, v.published_at, v.duration, v.is_short, s.added_at, s.id AS source_id, s.share
-    FROM sources s JOIN source_videos sv ON sv.source_id = s.id JOIN videos v ON v.id = sv.video_id
-    WHERE s.channel_id = ? AND v.playable = 1 AND v.duration > 0
-      AND NOT EXISTS (SELECT 1 FROM exclusions e WHERE e.channel_id = s.channel_id AND e.video_id = v.id)
+    FROM sources s JOIN channels c ON c.id = s.channel_id JOIN source_videos sv ON sv.source_id = s.id JOIN videos v ON v.id = sv.video_id
+    WHERE s.channel_id IN within AND v.playable = 1 AND v.duration > 0
+      AND NOT EXISTS (SELECT 1 FROM exclusions e WHERE e.channel_id = ? AND e.video_id = v.id)
       -- Skipped per row, so a stream also in one of the Channel's playlists still airs from there
       AND NOT (? AND s.kind = 'youtube_channel' AND v.is_live = 1)
-    ORDER BY s.position, s.id, CASE s.kind WHEN 'youtube_channel' THEN v.published_at ELSE sv.position END`).all(ch.id, ch.skip_live) as Video[];
+    ORDER BY c.position, c.id, s.position, s.id, CASE s.kind WHEN 'youtube_channel' THEN v.published_at ELSE sv.position END`).all(ch.id, ch.id, ch.skip_live) as Video[];
+  if (ch.ordering === 'release') rows.sort((a, b) => a.published_at - b.published_at);
   const words = ch.blocked_words.toLowerCase().split(',').map(w => w.trim()).filter(Boolean);
   const seen = new Set<string>();
   return rows.filter(v => {
@@ -62,7 +64,7 @@ function hash(s: string) {
 
 function pick(ch: Channel, videos: Video[], s: State, at: number): Video | undefined {
   if (!videos.length) return undefined;
-  if (ch.ordering === 'fixed') return videos[(videos.findIndex(v => v.id === s.last) + 1) % videos.length];
+  if (ch.ordering === 'fixed' || ch.ordering === 'release') return videos[(videos.findIndex(v => v.id === s.last) + 1) % videos.length];
   if (ch.ordering === 'new_first') {
     const queued = s.queue.map(id => videos.find(v => v.id === id)).find(v => v);
     if (queued) return queued;
@@ -156,10 +158,10 @@ export function schedule(db: Db, ch: Channel, from: number, to: number, now = Da
 // A New upload waits until someone Tunes in, then airs right after the current Slot
 export function queueNewUploads(db: Db, ch: Channel) {
   if (ch.ordering !== 'new_first') return;
-  db.prepare(`
+  db.prepare(`${WITHIN}
     INSERT OR IGNORE INTO queue (channel_id, video_id)
-    SELECT s.channel_id, v.id FROM sources s
+    SELECT ?, v.id FROM sources s
     JOIN source_videos sv ON sv.source_id = s.id JOIN videos v ON v.id = sv.video_id
-    WHERE s.channel_id = ? AND v.published_at > s.added_at
-      AND NOT EXISTS (SELECT 1 FROM slots WHERE channel_id = s.channel_id AND video_id = v.id)`).run(ch.id);
+    WHERE s.channel_id IN within AND v.published_at > s.added_at
+      AND NOT EXISTS (SELECT 1 FROM slots WHERE channel_id = ? AND video_id = v.id)`).run(ch.id, ch.id, ch.id);
 }

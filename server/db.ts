@@ -2,6 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 
 export type Db = DatabaseSync;
 
+// `within` holds a Channel and every Channel in its Group, however deep; bind the Channel's id first
+export const WITHIN = 'WITH RECURSIVE within(id) AS (SELECT ? UNION SELECT c.id FROM channels c JOIN within w ON c.parent_id = w.id)';
+
 export function openDb(file: string): Db {
   const db = new DatabaseSync(file);
   db.exec(`
@@ -11,7 +14,7 @@ export function openDb(file: string): Db {
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
       position INTEGER NOT NULL DEFAULT 0,
-      ordering TEXT NOT NULL DEFAULT 'shuffle',   -- shuffle | new_first | fixed
+      ordering TEXT NOT NULL DEFAULT 'shuffle',   -- shuffle | new_first | fixed | release
       recent_ratio INTEGER NOT NULL DEFAULT 3,    -- recent videos per Back catalog video
       recent_days INTEGER NOT NULL DEFAULT 180,
       skip_shorts INTEGER NOT NULL DEFAULT 1,
@@ -91,6 +94,7 @@ export function openDb(file: string): Db {
     ['channels', 'by_share INTEGER NOT NULL DEFAULT 0'], // mix Sources by their Share instead of airing every video equally often
     ['sources', 'share INTEGER NOT NULL DEFAULT 50'],    // 1 to 100, weighed against the Channel's other Sources
     ['channels', 'by_age INTEGER NOT NULL DEFAULT 1'],   // mix recent videos and Back catalog at recent_ratio; off airs every age equally often
+    ['channels', 'parent_id INTEGER REFERENCES channels(id) ON DELETE SET NULL'], // the Channel whose Group this one is in
   ]) {
     const names = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
     if (!names.includes(column.split(' ')[0])) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column}`);

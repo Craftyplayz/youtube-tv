@@ -10,6 +10,10 @@ A lean-back player for a household that turns YouTube videos into live, TV-style
 A named, always-on lineup of videos drawn from one or more Sources, tuned into like a TV channel. Never a YouTube channel.
 _Avoid_: Station, lineup, stream
 
+**Group**:
+The Channels put inside another Channel, however deep. That Channel airs its own Sources' videos and every video in its Group, under its own Filters and Ordering; each Channel in the Group still airs on its own. Splitting a Channel means moving its Sources into new Channels in its Group.
+_Avoid_: Folder, sub-channel, category
+
 **Source**:
 A place a Channel draws videos from: a YouTube channel, a YouTube playlist, or a hand-picked video list.
 _Avoid_: Feed, input
@@ -31,7 +35,7 @@ A video someone removed from one Channel for good; it never airs on that Channel
 _Avoid_: Banned, blocked, hidden video
 
 **Ordering**:
-A Channel's own rule for the sequence its videos air in: Shuffle, New uploads first, or Fixed order.
+A Channel's own rule for the sequence its videos air in: Shuffle, New uploads first, Fixed order, or Release order.
 _Avoid_: Sort, play mode
 
 **Shuffle**:
@@ -43,6 +47,9 @@ _Avoid_: Archive, old videos
 
 **Fixed order**:
 The Ordering where videos air Source by Source in the Channel's listed order, each Source oldest first (playlists and lists keep their own order), then loop.
+
+**Release order**:
+The Ordering where every video airs oldest published first, whatever its Source, then loops.
 
 **New uploads first**:
 The Ordering where a New upload airs right after the current Slot once someone Tunes in; everything else airs in Shuffle order.

@@ -14,8 +14,8 @@ function setup(ordering: string) {
   db.prepare("INSERT INTO channels (id, name, ordering) VALUES (1, 'Tech', ?)").run(ordering);
   return db;
 }
-function addSource(db: Db, kind: string, addedAt: number, videos: V[]) {
-  const { id } = db.prepare("INSERT INTO sources (channel_id, kind, ref, label, added_at) VALUES (1, ?, '', '', ?) RETURNING id").get(kind, addedAt) as { id: number };
+function addSource(db: Db, kind: string, addedAt: number, videos: V[], channelId = 1) {
+  const { id } = db.prepare("INSERT INTO sources (channel_id, kind, ref, label, added_at) VALUES (?, ?, '', '', ?) RETURNING id").get(channelId, kind, addedAt) as { id: number };
   videos.forEach(([v, published, minutes, short = 0], i) => {
     db.prepare("INSERT OR IGNORE INTO videos (id, title, channel_title, published_at, duration, is_short) VALUES (?, ?, 'LTT', ?, ?, ?)")
       .run(v, v, published, minutes * 60, short);
@@ -82,6 +82,17 @@ test('Fixed order plays Source by Source, YouTube channels oldest first, then lo
   addSource(db, 'youtube_channel', NOW - DAY, [['new', NOW - DAY, 10], ['old', NOW - 9 * DAY, 10]]);
   addSource(db, 'list', NOW - DAY, [['x', NOW - 5 * DAY, 10], ['y', NOW - 50 * DAY, 10]]);
   assert.deepEqual(ids(db, NOW + 50 * MIN), ['old', 'new', 'x', 'y', 'old']);
+});
+
+test('A Channel airs its whole Group, and Release order airs it oldest first across Sources', () => {
+  const db = setup('release');
+  db.exec("INSERT INTO channels (id, name, parent_id) VALUES (2, 'Mumbo', 1), (3, 'Mumbo S7', 2), (4, 'Grian', 1)");
+  addSource(db, 'playlist', NOW - DAY, [['m2', NOW - 2 * DAY, 10]], 2);
+  addSource(db, 'playlist', NOW - DAY, [['m1', NOW - 9 * DAY, 10]], 3);
+  addSource(db, 'playlist', NOW - DAY, [['g1', NOW - 5 * DAY, 10]], 4);
+  assert.deepEqual(ids(db, NOW + 40 * MIN), ['m1', 'g1', 'm2', 'm1']);
+  const mumbo = db.prepare('SELECT * FROM channels WHERE id = 2').get() as Channel;
+  assert.deepEqual(new Set(schedule(db, mumbo, NOW, NOW + 40 * MIN, NOW).map(s => s.videoId)), new Set(['m1', 'm2']), 'not Grian');
 });
 
 test('New uploads wait for Tune in, then air after the current Slot, oldest first', () => {
