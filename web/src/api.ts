@@ -1,5 +1,5 @@
 export type Slot = { start: number; end: number; videoId: string; title: string; by: string };
-export type Lineup = { id: number; name: string; slug: string; group?: string; slots: Slot[]; watched: number; views: number };
+export type Lineup = { id: number; name: string; slug: string; parent: number | null; slots: Slot[]; watched: number; views: number };
 export type Source = { id: number; kind: 'youtube_channel' | 'playlist' | 'list'; label: string; share: number; videos: number };
 export type Channel = {
   id: number;

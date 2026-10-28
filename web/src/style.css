@@ -257,4 +257,9 @@ textarea { width: 100%; resize: vertical; }
 .room-link input { flex: 1; min-width: 0; }
 .room-panel label { display: flex; gap: 8px; align-items: center; }
 .room-panel small { color: var(--dim); }
+.group-panel { max-height: calc(100% - 140px); overflow-y: auto; }
+.group-panel ul { margin: 0; padding: 0; list-style: none; }
+.group-panel ul ul { padding-left: 18px; }
+.group-panel button { width: 100%; padding: 6px 8px; text-align: left; background: none; border: 0; border-radius: 6px; }
+.group-panel button:hover, .group-panel button.on { background: rgb(255 255 255 / .12); }
 .progress.locked { pointer-events: none; }

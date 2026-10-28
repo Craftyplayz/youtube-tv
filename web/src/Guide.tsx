@@ -22,7 +22,8 @@ export default function Guide({ channel, onPlay, onClose }: Props) {
   const x = (t: number) => NAME_W + ((Math.min(Math.max(t, from), to) - from) / 60_000) * PX_PER_MIN;
   const width = x(to);
 
-  useEffect(() => { schedule(from, to).then(setLineups); }, [from, to]);
+  // Channels in a Group stay out, except the one this Screen is on
+  useEffect(() => { schedule(from, to).then(ls => setLineups(ls.filter(l => !l.parent || l.id === channel))); }, [from, to]);
   useEffect(() => {
     const g = grid.current;
     if (!lineups || !g) return;

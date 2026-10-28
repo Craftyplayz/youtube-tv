@@ -302,8 +302,7 @@ const routes: Route[] = [
       channels: channels().filter(c => !only || c.id === Number(only))
         .map(c => {
           const { seconds, views } = totals(db, null, c.id);
-          const group = c.parent_id ? channel(String(c.parent_id)).name : undefined;
-          return { id: c.id, name: c.name, slug: slug(c.name, c.id), group, slots: schedule(db, c, from, to, now), watched: seconds, views };
+          return { id: c.id, name: c.name, slug: slug(c.name, c.id), parent: c.parent_id, slots: schedule(db, c, from, to, now), watched: seconds, views };
         }),
     };
   }],

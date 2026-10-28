@@ -104,6 +104,7 @@ export default function Player({ slug }: { slug: string }) {
   const [room, setRoom] = useState(() => new URLSearchParams(location.search).get('room'));
   const [roomInfo, setRoomInfo] = useState<{ hostOnly: boolean; members: number; host: boolean } | null>(null);
   const [roomPanel, setRoomPanel] = useState(false);
+  const [groupPanel, setGroupPanel] = useState(false);
   const [copied, setCopied] = useState(false);
   const roomRef = useRef<{ id: string | null; state: RoomState | null; control: boolean }>({ id: room, state: null, control: true });
   const applying = useRef(false); // playing what the Room sent, which mustn't be sent back
@@ -329,10 +330,11 @@ export default function Player({ slug }: { slug: string }) {
     if (prev && cur.current.channel === channel) play(channel, prev, true);
   }
 
+  // Channel up and down step through the Channels on Home; from inside a Group they step on from the Group's Channel
   function flip(step: number) {
-    if (!lineups?.length) return;
-    const i = lineups.findIndex(l => l.id === cur.current.channel);
-    tuneIn(lineups[(i + step + lineups.length) % lineups.length].id);
+    if (!top.length) return;
+    const i = top.findIndex(l => l.id === root?.id);
+    tuneIn(top[(i + step + top.length) % top.length].id);
   }
 
   function togglePause() {
@@ -571,7 +573,18 @@ export default function Player({ slug }: { slug: string }) {
   });
 
   const slot = cur.current.slot;
-  const index = lineups?.findIndex(l => l.id === cur.current.channel) ?? -1;
+  const current = lineups?.find(l => l.id === cur.current.channel);
+  const inGroup = (id: number) => lineups?.filter(l => l.parent === id) ?? [];
+  const top = lineups?.filter(l => !l.parent) ?? [];
+  // The Channel on Home that the one playing is inside, however deep
+  let root = current;
+  while (root?.parent) root = lineups?.find(l => l.id === root!.parent) ?? undefined;
+  const groupTree = (l: Lineup) => (
+    <li key={l.id}>
+      <button className={l.id === current?.id ? 'on' : ''} disabled={locked} onClick={() => { setGroupPanel(false); tuneIn(l.id); }}>{l.name}</button>
+      {inGroup(l.id).length > 0 && <ul>{inGroup(l.id).map(groupTree)}</ul>}
+    </li>
+  );
   const duration = slot ? (slot.end - slot.start) / 1000 : 0;
   const shift = slot ? slot.start + pos * 1000 - now() : 0;
   const isLive = Math.abs(shift) < LIVE_WITHIN;
@@ -612,7 +625,7 @@ export default function Player({ slug }: { slug: string }) {
       {started && (
         <div className={`hud ${ui || paused || !slot ? '' : 'hidden'}`}>
           <div className="hud-top">
-            <span className="ch">{index + 1} {lineups?.[index]?.name}</span>
+            <span className="ch">{top.indexOf(root!) + 1} {current?.name}</span>
             {/* Opens the video on YouTube at this second, pausing here so the two don't play over each other */}
             {slot ? (
               <a className="title" href={`https://www.youtube.com/watch?v=${slot.videoId}&t=${Math.floor(pos)}s`}
@@ -669,6 +682,9 @@ export default function Player({ slug }: { slug: string }) {
               )}
               <span className="spacer" />
               <Ctl icon="block" label="Exclude: never show this video on this Channel again" onClick={exclude} disabled={!slot || locked} />
+              {root && inGroup(root.id).length > 0 && (
+                <Ctl icon="group" label={`Channels in ${root.name}`} onClick={() => { setRoomPanel(false); setGroupPanel(p => !p); }} className={groupPanel ? 'on' : ''} aria-pressed={groupPanel} />
+              )}
               <Ctl icon="guide" label="Guide (g)" onClick={() => setGuide(true)} />
               <Ctl icon="stats" label="Stats" onClick={() => setStats(true)} />
               <Ctl icon="comments" label="Comments" onClick={() => setShowComments(s => !s)} className={showComments ? 'on' : ''} aria-pressed={showComments} disabled={!slot} />
@@ -727,7 +743,16 @@ export default function Player({ slug }: { slug: string }) {
           <button onClick={leaveRoom}>Leave room</button>
         </div>
       )}
-      {stats && lineups?.[index] &&<ChannelStats key={lineups[index].id} channel={lineups[index]} onClose={() => setStats(false)} />}
+      {groupPanel && root && (
+        <div className="room-panel group-panel">
+          <div className="room-head">
+            <b>Channels in {root.name}</b>
+            <button title="Close" aria-label="Close" onClick={() => setGroupPanel(false)}><Icon name="close" /></button>
+          </div>
+          <ul>{groupTree(root)}</ul>
+        </div>
+      )}
+      {stats && current && <ChannelStats key={current.id} channel={current} onClose={() => setStats(false)} />}
       {guide && (
         <Guide
           channel={cur.current.channel}

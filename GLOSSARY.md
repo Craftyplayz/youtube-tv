@@ -11,7 +11,7 @@ A named, always-on lineup of videos drawn from one or more Sources, tuned into l
 _Avoid_: Station, lineup, stream
 
 **Group**:
-The Channels put inside another Channel, however deep. That Channel airs its own Sources' videos and every video in its Group, under its own Filters and Ordering; each Channel in the Group still airs on its own. Splitting a Channel means moving its Sources into new Channels in its Group.
+The Channels put inside another Channel, however deep. That Channel airs its own Sources' videos and every video in its Group, under its own Filters and Ordering; each Channel in the Group still airs on its own. Splitting a Channel means moving its Sources into new Channels in its Group. Only Channels outside any Group show on Home and in the Guide; the rest are picked from the Group button while watching.
 _Avoid_: Folder, sub-channel, category
 
 **Source**:

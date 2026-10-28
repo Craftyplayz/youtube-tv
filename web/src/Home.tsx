@@ -11,14 +11,15 @@ export default function Home() {
 
   useEffect(() => {
     document.title = 'Youtube TV';
-    const load = () => schedule(now(), now() + 1).then(setLineups);
+    // Channels in a Group are picked from inside their Group's Channel
+    const load = () => schedule(now(), now() + 1).then(ls => setLineups(ls.filter(l => !l.parent)));
     load();
     const t = setInterval(load, 30_000);
     return () => clearInterval(t);
   }, []);
 
   const q = query.trim().toLowerCase();
-  const shown = lineups?.filter(l => `${l.group ?? ''} ${l.name} ${l.slots[0]?.title ?? ''}`.toLowerCase().includes(q)) ?? [];
+  const shown = lineups?.filter(l => `${l.name} ${l.slots[0]?.title ?? ''}`.toLowerCase().includes(q)) ?? [];
 
   return (
     <main className="home">
@@ -42,7 +43,7 @@ export default function Home() {
                 <li key={l.id}>
                   <a href={'/' + l.slug} className="channel-card">
                     {s ? <img src={thumb(s.videoId)} alt="" /> : <span className="off">Off air</span>}
-                    <span className="card-name"><b>{lineups.indexOf(l) + 1}</b>{l.group && `${l.group} › `}{l.name}</span>
+                    <span className="card-name"><b>{lineups.indexOf(l) + 1}</b>{l.name}</span>
                     <span className="card-now">{s ? s.title : 'Off air'}</span>
                     <span className="card-watched" title={watchedExactly(l.watched)}>Watched: {watched(l.watched)} · {l.views.toLocaleString()} video{l.views === 1 ? '' : 's'}</span>
                     {s && <progress max={s.end - s.start} value={now() - s.start} />}
